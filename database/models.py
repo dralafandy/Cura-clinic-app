@@ -189,7 +189,7 @@ class Database:
             ]
             cursor.executemany('INSERT INTO treatments (name, description, base_price, duration_minutes, category) VALUES (?, ?, ?, ?, ?)', sample_treatments)
             
-            # مواعيد
+            # مواعيد (استخدام معرفات الإدراج الأخيرة)
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
                            (1, 1, 1, datetime.date.today().isoformat(), "10:00", 200.0))
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
