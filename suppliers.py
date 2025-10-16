@@ -168,7 +168,6 @@ def save_suppliers_changes(edited_df, original_df):
                 row['address'] != original_row['address'] or
                 row['payment_terms'] != original_row['payment_terms']):
                 
-                # هنا يمكن إضافة دالة تحديث في crud.py إذا لم تكن موجودة
                 conn = crud.db.get_connection()
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -190,7 +189,6 @@ def delete_selected_suppliers(supplier_ids):
     """حذف الموردين المحددين"""
     try:
         for supplier_id in supplier_ids:
-            # أضف دالة delete_supplier في crud.py
             conn = crud.db.get_connection()
             cursor = conn.cursor()
             cursor.execute("DELETE FROM suppliers WHERE id = ?", (supplier_id,))
@@ -243,8 +241,6 @@ def send_bulk_messages():
                 sent_count = 0
                 for _, supplier in suppliers_df.iterrows():
                     if supplier['email']:
-                        # هنا يمكن إضافة كود إرسال البريد باستخدام smtplib
-                        # مثال: import smtplib; server.sendmail(...)
                         sent_count += 1
                         st.success(f"تم إرسال الرسالة إلى {supplier['name']}")
                 
@@ -285,6 +281,7 @@ def suppliers_reports():
     """تقارير الموردين"""
     st.subheader("📊 تقارير الموردين")
     
+    suppliers_df = crud.get_all_suppliers()
     tab1, tab2, tab3 = st.tabs(["إحصائيات عامة", "تحليل المخزون حسب المورد", "تحليل أداء الموردين"])
     
     with tab1:
@@ -294,7 +291,7 @@ def suppliers_reports():
         show_suppliers_inventory_analysis()
     
     with tab3:
-        show_suppliers_performance_analysis()
+        show_suppliers_performance_analysis(suppliers_df)
 
 def show_suppliers_general_stats():
     """إحصائيات عامة للموردين"""
@@ -325,7 +322,6 @@ def show_suppliers_inventory_analysis():
         st.info("لا توجد أصناف في المخزون")
         return
     
-    # تجميع حسب المورد
     supplier_inventory = inventory_df.groupby('supplier_name').agg({
         'id': 'count',
         'quantity': 'sum',
@@ -336,7 +332,6 @@ def show_suppliers_inventory_analysis():
     supplier_inventory = supplier_inventory.reset_index()
     supplier_inventory.columns = ['المورد', 'عدد الأصناف', 'إجمالي الكميات', 'متوسط السعر']
     
-    # إزالة الصفوف الفارغة
     supplier_inventory = supplier_inventory[supplier_inventory['المورد'].notna()]
     
     if not supplier_inventory.empty:
@@ -349,7 +344,6 @@ def show_suppliers_inventory_analysis():
             hide_index=True
         )
         
-        # رسم بياني
         import plotly.express as px
         fig = px.bar(supplier_inventory, x='المورد', y='إجمالي الكميات',
                      title="إجمالي الكميات حسب المورد",
@@ -362,10 +356,12 @@ def show_suppliers_performance_analysis(suppliers_df):
     """تحليل أداء الموردين"""
     st.subheader("📈 تحليل أداء الموردين")
     
-    # افتراضي: تقييم بناءً على عدد الطلبات وسرعة التسليم (يمكن توسيع مع بيانات إضافية)
+    if suppliers_df.empty:
+        st.info("لا توجد بيانات موردين لتحليل الأداء")
+        return
+    
     performance_data = []
     for _, supplier in suppliers_df.iterrows():
-        # محاكاة بيانات: عدد الطلبات، متوسط الوقت، تقييم
         performance_data.append({
             'المورد': supplier['name'],
             'عدد الطلبات': 15 + len(supplier['name']) % 10,  # محاكاة
@@ -377,7 +373,6 @@ def show_suppliers_performance_analysis(suppliers_df):
     
     st.dataframe(performance_df, use_container_width=True, hide_index=True)
     
-    # رسم بياني للتقييم
     import plotly.express as px
     fig = px.bar(performance_df, x='المورد', y='تقييم عام',
                  title="تقييم أداء الموردين",
@@ -391,16 +386,13 @@ def show_payment_terms_analysis(suppliers_df):
     payment_terms_stats = suppliers_df['payment_terms'].value_counts()
     
     import plotly.express as px
-    
     fig = px.bar(
         x=payment_terms_stats.index,
         y=payment_terms_stats.values,
         title="عدد الموردين حسب شروط الدفع"
     )
-    
     st.plotly_chart(fig, use_container_width=True)
     
-    # نصائح مالية
     cash_suppliers = len(suppliers_df[suppliers_df['payment_terms'] == 'نقداً عند الاستلام'])
     credit_suppliers = len(suppliers_df) - cash_suppliers
     
@@ -424,7 +416,7 @@ def purchase_orders():
 def create_purchase_order_form():
     """نموذج إنشاء طلب شراء"""
     suppliers_df = crud.get_all_suppliers()
-    inventory_df = crud.get_low_stock_items()  # اقتراح بناءً على المخزون المنخفض
+    inventory_df = crud.get_low_stock_items()
     
     if suppliers_df.empty:
         st.error("يجب إضافة موردين أولاً")
@@ -449,7 +441,6 @@ def create_purchase_order_form():
         
         notes = st.text_area("ملاحظات الطلب")
     
-    # إضافة عناصر الطلب
     order_items = []
     if 'order_items' not in st.session_state:
         st.session_state.order_items = []
@@ -481,16 +472,18 @@ def create_purchase_order_form():
         if submitted and selected_supplier_id:
             total_amount = sum(item['quantity'] * item['unit_price'] for item in order_items)
             create_purchase_order(selected_supplier_id, order_items, total_amount, order_date, expected_delivery, notes)
-            st.session_state.order_items = []  # إعادة تعيين
+            st.session_state.order_items = []
             st.success("تم إنشاء الطلب بنجاح!")
 
 def create_purchase_order(supplier_id, order_items, total_amount, order_date, expected_delivery, notes):
     """إنشاء طلب شراء"""
     try:
-        # ربط بالمصروفات: إضافة مصروف جديد كطلب شراء
+        suppliers_df = crud.get_all_suppliers()
+        supplier_name = suppliers_df[suppliers_df['id'] == supplier_id]['name'].iloc[0] if supplier_id in suppliers_df['id'].values else 'غير محدد'
+        
         crud.create_expense(
             category="شراء من موردين",
-            description=f"طلب شراء من المورد ID {supplier_id} - إجمالي {total_amount} ج.م",
+            description=f"طلب شراء من المورد {supplier_name} (ID: {supplier_id}) - إجمالي {total_amount} ج.م",
             amount=total_amount,
             expense_date=order_date,
             payment_method="آجل",
@@ -500,8 +493,6 @@ def create_purchase_order(supplier_id, order_items, total_amount, order_date, ex
         
         show_success_message(f"تم إنشاء طلب الشراء بنجاح بقيمة {format_currency(total_amount)}")
         
-        # عرض ملخص الطلب
-        supplier_name = suppliers_df[suppliers_df['id'] == supplier_id]['name'].iloc[0]
         st.info(f"""
         **🛒 ملخص طلب الشراء:**
         - **المورد:** {supplier_name}
@@ -511,11 +502,9 @@ def create_purchase_order(supplier_id, order_items, total_amount, order_date, ex
         - **التسليم المتوقع:** {format_date_arabic(expected_delivery)}
         """)
         
-        # تحديث المخزون إذا تم التسليم (افتراضي)
         if st.checkbox("✅ تم التسليم؟ (تحديث المخزون)"):
             for item in order_items:
-                # ابحث عن الصنف وحدث الكمية
-                item_row = crud.get_inventory_by_name(item['item_name'])  # أضف هذه الدالة في crud.py إذا لم تكن
+                item_row = crud.get_inventory_by_name(item['item_name'])
                 if item_row:
                     new_qty = item_row['quantity'] + item['quantity']
                     crud.update_inventory_quantity(item_row['id'], new_qty)
@@ -561,17 +550,14 @@ def show_supplier_accounts_history():
     suppliers_df = crud.get_all_suppliers()
     expenses_df = crud.get_all_expenses()
     
-    # فلترة المصروفات المتعلقة بالموردين
     supplier_expenses = expenses_df[expenses_df['category'] == 'شراء من موردين']
     
     if supplier_expenses.empty:
         st.info("لا توجد معاملات حسابية مع الموردين")
         return
     
-    # تجميع حسب المورد (افتراضي من notes أو receipt_number)
     accounts_data = []
     for _, expense in supplier_expenses.iterrows():
-        # استخراج ID المورد من receipt_number (مثال: PO-YYYYMMDD-ID)
         if 'PO-' in expense['receipt_number']:
             supplier_id = int(expense['receipt_number'].split('-')[-1])
             supplier_name = suppliers_df[suppliers_df['id'] == supplier_id]['name'].iloc[0] if supplier_id in suppliers_df['id'].values else 'غير محدد'
@@ -596,7 +582,6 @@ def show_supplier_accounts_history():
         hide_index=True
     )
     
-    # إضافة دفعة جديدة لمورد
     selected_supplier_id = st.selectbox(
         "إضافة دفعة لمورد",
         options=suppliers_df['id'].tolist(),
@@ -611,7 +596,6 @@ def show_supplier_accounts_history():
             notes = st.text_area("ملاحظات")
             
             if st.form_submit_button("💳 تسجيل الدفعة"):
-                # ربط كمصروف (دفع لمورد)
                 crud.create_expense(
                     category="دفعات للموردين",
                     description=f"دفعة للمورد ID {selected_supplier_id}",
@@ -627,6 +611,8 @@ def show_supplier_accounts_history():
 def show_debts_report():
     """تقرير الديون للموردين"""
     expenses_df = crud.get_all_expenses()
+    expenses_df['expense_date'] = pd.to_datetime(expenses_df['expense_date'], errors='coerce')
+    
     supplier_expenses = expenses_df[(expenses_df['category'] == 'شراء من موردين') & (expenses_df['payment_method'] == 'آجل')]
     payments_df = expenses_df[expenses_df['category'] == 'دفعات للموردين']
     
@@ -634,20 +620,11 @@ def show_debts_report():
         st.info("لا توجد ديون حالية للموردين")
         return
     
-    # تحويل التواريخ إلى datetime للمقارنة
-    expenses_df['expense_date'] = pd.to_datetime(expenses_df['expense_date'], errors='coerce')
-    
-    supplier_expenses = expenses_df[(expenses_df['category'] == 'شراء من موردين') & (expenses_df['payment_method'] == 'آجل')]
-    payments_df = expenses_df[expenses_df['category'] == 'دفعات للموردين']
-    
-    # حساب الديون الصافية
     debts_data = []
     for _, expense in supplier_expenses.iterrows():
         supplier_id = int(expense['receipt_number'].split('-')[-1]) if 'PO-' in expense['receipt_number'] else None
         if supplier_id:
-            # إجمالي الشراء
             total_purchase = expense['amount']
-            # المدفوعات المرتبطة
             related_payments = payments_df[payments_df['receipt_number'].str.contains(str(supplier_id), na=False)]['amount'].sum()
             net_debt = total_purchase - related_payments
             debts_data.append({
@@ -655,11 +632,11 @@ def show_debts_report():
                 'إجمالي الشراء': total_purchase,
                 'المدفوع': related_payments,
                 'الدين الصافي': max(0, net_debt),
-                'تاريخ الاستحقاق': expense['expense_date'].date()  # تحويل إلى date
+                'تاريخ الاستحقاق': expense['expense_date'].date() if pd.notna(expense['expense_date']) else date.today()
             })
     
     debts_df = pd.DataFrame(debts_data)
-    debts_df['تاريخ الاستحقاق'] = pd.to_datetime(debts_df['تاريخ الاستحقاق'], errors='coerce').dt.date  # ضمان نوع date
+    debts_df['تاريخ الاستحقاق'] = pd.to_datetime(debts_df['تاريخ الاستحقاق'], errors='coerce').dt.date
     
     if not debts_df.empty:
         st.dataframe(
@@ -676,7 +653,6 @@ def show_debts_report():
         total_debt = debts_df['الدين الصافي'].sum()
         st.metric("💰 إجمالي الديون للموردين", format_currency(total_debt))
         
-        # تنبيهات الديون المتأخرة - مع تحويل إلى date
         today = date.today()
         overdue_debts = debts_df[pd.to_datetime(debts_df['تاريخ الاستحقاق']).dt.date < today]
         if not overdue_debts.empty:
