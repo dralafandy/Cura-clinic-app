@@ -12,12 +12,10 @@ class CRUDOperations:
         """إضافة طبيب جديد"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             INSERT INTO doctors (name, specialization, phone, email, address, hire_date, salary, commission_rate)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (name, specialization, phone, email, address, hire_date, salary, commission_rate))
-        
         doctor_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -43,13 +41,11 @@ class CRUDOperations:
         """تحديث بيانات طبيب"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             UPDATE doctors 
             SET name=?, specialization=?, phone=?, email=?, address=?, salary=?, commission_rate=?
             WHERE id=?
         ''', (name, specialization, phone, email, address, salary, commission_rate, doctor_id))
-        
         conn.commit()
         conn.close()
     
@@ -66,12 +62,10 @@ class CRUDOperations:
         """إضافة مريض جديد"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             INSERT INTO patients (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact))
-        
         patient_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -97,13 +91,11 @@ class CRUDOperations:
         """تحديث بيانات مريض"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             UPDATE patients 
             SET name=?, phone=?, email=?, address=?, date_of_birth=?, gender=?, medical_history=?, emergency_contact=?
             WHERE id=?
         ''', (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact, patient_id))
-        
         conn.commit()
         conn.close()
     
@@ -120,19 +112,17 @@ class CRUDOperations:
         """إضافة علاج جديد مع نسبة العمولة"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             INSERT INTO treatments (name, description, base_price, duration_minutes, category, commission_rate)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (name, description, base_price, duration_minutes, category, commission_rate))
-        
         treatment_id = cursor.lastrowid
         conn.commit()
         conn.close()
         return treatment_id
     
     def get_all_treatments(self):
-        """الحصول على جميع العلاجات مع نسبة العمولة"""
+        """الحصول على جميع العلاجات"""
         conn = self.db.get_connection()
         df = pd.read_sql_query("SELECT * FROM treatments WHERE is_active = 1 ORDER BY name", conn)
         conn.close()
@@ -148,16 +138,14 @@ class CRUDOperations:
         return result
     
     def update_treatment(self, treatment_id, name, description, base_price, duration_minutes, category, commission_rate):
-        """تحديث بيانات علاج مع نسبة العمولة"""
+        """تحديث بيانات علاج"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             UPDATE treatments 
             SET name=?, description=?, base_price=?, duration_minutes=?, category=?, commission_rate=?
             WHERE id=?
         ''', (name, description, base_price, duration_minutes, category, commission_rate, treatment_id))
-        
         conn.commit()
         conn.close()
     
@@ -174,12 +162,10 @@ class CRUDOperations:
         """إضافة موعد جديد"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, status, notes, total_cost)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, status, notes, total_cost))
-        
         appointment_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -193,7 +179,8 @@ class CRUDOperations:
                 a.*,
                 p.name as patient_name,
                 d.name as doctor_name,
-                t.name as treatment_name
+                t.name as treatment_name,
+                t.commission_rate
             FROM appointments a
             LEFT JOIN patients p ON a.patient_id = p.id
             LEFT JOIN doctors d ON a.doctor_id = d.id
@@ -212,7 +199,8 @@ class CRUDOperations:
                 a.*,
                 p.name as patient_name,
                 d.name as doctor_name,
-                t.name as treatment_name
+                t.name as treatment_name,
+                t.commission_rate
             FROM appointments a
             LEFT JOIN patients p ON a.patient_id = p.id
             LEFT JOIN doctors d ON a.doctor_id = d.id
@@ -228,7 +216,19 @@ class CRUDOperations:
         """الحصول على موعد بواسطة ID"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
+        cursor.execute('''
+            SELECT 
+                a.*,
+                p.name as patient_name,
+                d.name as doctor_name,
+                t.name as treatment_name,
+                t.commission_rate
+            FROM appointments a
+            LEFT JOIN patients p ON a.patient_id = p.id
+            LEFT JOIN doctors d ON a.doctor_id = d.id
+            LEFT JOIN treatments t ON a.treatment_id = t.id
+            WHERE a.id = ?
+        ''', (appointment_id,))
         result = cursor.fetchone()
         conn.close()
         return result
@@ -237,13 +237,11 @@ class CRUDOperations:
         """تحديث موعد"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             UPDATE appointments 
             SET patient_id=?, doctor_id=?, treatment_id=?, appointment_date=?, appointment_time=?, status=?, notes=?, total_cost=?
             WHERE id=?
         ''', (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, status, notes, total_cost, appointment_id))
-        
         conn.commit()
         conn.close()
     
@@ -260,12 +258,10 @@ class CRUDOperations:
         """إضافة دفعة جديدة"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             INSERT INTO payments (appointment_id, patient_id, amount, payment_method, payment_date, status, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (appointment_id, patient_id, amount, payment_method, payment_date, status, notes))
-        
         payment_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -291,12 +287,10 @@ class CRUDOperations:
         """إضافة مصروف جديد"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             INSERT INTO expenses (category, description, amount, expense_date, payment_method, receipt_number, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (category, description, amount, expense_date, payment_method, receipt_number, notes))
-        
         expense_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -309,25 +303,33 @@ class CRUDOperations:
         conn.close()
         return df
     
+    # ========== عمليات المخزون ==========
+    def get_all_inventory(self):
+        """الحصول على جميع عناصر المخزون"""
+        conn = self.db.get_connection()
+        df = pd.read_sql_query("SELECT * FROM inventory ORDER BY item_name", conn)
+        conn.close()
+        return df
+    
+    def get_low_stock_items(self):
+        """الحصول على العناصر ذات المخزون المنخفض"""
+        conn = self.db.get_connection()
+        df = pd.read_sql_query("SELECT * FROM inventory WHERE quantity <= min_stock_level", conn)
+        conn.close()
+        return df
+    
     # ========== تقارير وإحصائيات ==========
     def get_financial_summary(self, start_date=None, end_date=None):
         """الحصول على ملخص مالي مع حصص العيادة والأطباء"""
         conn = self.db.get_connection()
-        
-        # إجمالي المدفوعات
         payments_query = "SELECT COALESCE(SUM(amount), 0) as total_payments FROM payments"
         if start_date and end_date:
             payments_query += f" WHERE payment_date BETWEEN '{start_date}' AND '{end_date}'"
-        
-        # إجمالي المصروفات
         expenses_query = "SELECT COALESCE(SUM(amount), 0) as total_expenses FROM expenses"
         if start_date and end_date:
             expenses_query += f" WHERE expense_date BETWEEN '{start_date}' AND '{end_date}'"
-        
         total_payments = pd.read_sql_query(payments_query, conn).iloc[0]['total_payments']
         total_expenses = pd.read_sql_query(expenses_query, conn).iloc[0]['total_expenses']
-        
-        # حساب حصص العيادة والأطباء بناءً على commission_rate في treatments
         appointments_query = '''
             SELECT a.total_cost, t.commission_rate
             FROM appointments a
@@ -336,13 +338,10 @@ class CRUDOperations:
         '''
         if start_date and end_date:
             appointments_query += f" AND a.appointment_date BETWEEN '{start_date}' AND '{end_date}'"
-        
         appointments_df = pd.read_sql_query(appointments_query, conn)
         doctors_share = (appointments_df['total_cost'] * (appointments_df['commission_rate'] / 100)).sum()
         clinic_share = appointments_df['total_cost'].sum() - doctors_share
-        
         conn.close()
-        
         return {
             'total_revenue': total_payments,
             'total_expenses': total_expenses,
@@ -360,5 +359,4 @@ class CRUDOperations:
         conn.close()
         return result.iloc[0]['count'] if not result.empty else 0
 
-# إنشاء مثيل من عمليات CRUD
 crud = CRUDOperations()
