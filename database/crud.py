@@ -403,6 +403,20 @@ class CRUDOperations:
         result = pd.read_sql_query(query, conn, params=(today,))
         conn.close()
         return result.iloc[0]['count'] if not result.empty else 0
+    def delete_supplier(self, supplier_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM suppliers WHERE id = ?", (supplier_id,))
+        conn.commit()
+        conn.close()
 
+    def get_inventory_by_name(self, item_name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM inventory WHERE item_name = ?", (item_name,))
+        columns = [desc[0] for desc in cursor.description]
+        row = cursor.fetchone()
+        conn.close()
+        return dict(zip(columns, row)) if row else None
 # إنشاء مثيل من عمليات CRUD
 crud = CRUDOperations()
