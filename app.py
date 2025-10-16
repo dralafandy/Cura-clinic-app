@@ -1,4 +1,3 @@
-import streamlit as st
 from doctors import show_doctors
 from patients import show_patients
 from appointments import show_appointments
@@ -8,12 +7,14 @@ from inventory import show_inventory
 from suppliers import show_suppliers
 from expenses import show_expenses
 from dashboard import show_dashboard
-
 def main():
+    # تهيئة تكوين الصفحة
     st.set_page_config(page_title="نظام إدارة العيادة", layout="wide")
+    
+    # عنوان الشريط الجانبي
     st.sidebar.title("📋 قائمة الخيارات")
-
-    # قائمة التنقل في الشريط الجانبي
+    
+    # تعريف قاموس الصفحات
     pages = {
         "لوحة التحكم": show_dashboard,
         "إدارة الأطباء": show_doctors,
@@ -25,12 +26,10 @@ def main():
         "إدارة الموردين": show_suppliers,
         "إدارة المصروفات": show_expenses
     }
-
-    # اختيار الصفحة
+    
+    # إنشاء قائمة اختيار في الشريط الجانبي باستخدام radio
     selection = st.sidebar.radio("اختر الوحدة", list(pages.keys()))
-
+    
     # عرض الصفحة المختارة
-    pages[selection]()
-
+    pages[selection]()  # تنفيذ الدالة المختارة
 if __name__ == "__main__":
-    main()
