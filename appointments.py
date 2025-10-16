@@ -234,7 +234,7 @@ def book_new_appointment():
             status = st.selectbox("الحالة", ['مجدول', 'مكتمل', 'ملغى', 'معلق'], index=0)
             notes = st.text_area("ملاحظات")
             
-            submitted = st.form_submit_button("📅 حجز الموعد")
+            submitted = st.form_submit_button("📅 حجز الموعد")  # Ensure submit button is present
             
             if submitted:
                 if not (selected_patient_id and selected_doctor_id and appointment_date and appointment_time and selected_treatment_ids):
