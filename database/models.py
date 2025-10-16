@@ -191,9 +191,9 @@ class Database:
             
             # مواعيد
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
-                           (1, 1, 1, date.today().isoformat(), "10:00", 200.0))
+                           (1, 1, 1, datetime.date.today().isoformat(), "10:00", 200.0))
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
-                           (2, 2, 2, (date.today() + timedelta(days=1)).isoformat(), "14:00", 300.0))
+                           (2, 2, 2, (datetime.date.today() + timedelta(days=1)).isoformat(), "14:00", 300.0))
             
             # مخزون
             sample_inventory = [
@@ -208,7 +208,7 @@ class Database:
             
             # مصروفات
             cursor.execute('INSERT INTO expenses (category, description, amount, expense_date, payment_method) VALUES (?, ?, ?, ?, ?)',
-                           ("رواتب", "راتب أطباء", 30000.0, date.today().isoformat(), "تحويل بنكي"))
+                           ("رواتب", "راتب أطباء", 30000.0, datetime.date.today().isoformat(), "تحويل بنكي"))
         
         conn.commit()
         conn.close()
