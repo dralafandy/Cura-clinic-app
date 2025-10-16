@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
-from database.crud import crud
+from database.crud import CRUDOperations
 from utils.helpers import (
     format_currency, show_success_message, show_error_message,
     format_date_arabic, get_appointment_time_slots, get_status_color, calculate_age
 )
 import calendar
+
+crud = CRUDOperations()
 
 def show_appointments():
     st.title("📅 إدارة المواعيد")
@@ -234,7 +236,7 @@ def book_new_appointment():
             status = st.selectbox("الحالة", ['مجدول', 'مكتمل', 'ملغى', 'معلق'], index=0)
             notes = st.text_area("ملاحظات")
             
-            submitted = st.form_submit_button("📅 حجز الموعد")  # Ensure submit button is present
+            submitted = st.form_submit_button("📅 حجز الموعد")
             
             if submitted:
                 if not (selected_patient_id and selected_doctor_id and appointment_date and appointment_time and selected_treatment_ids):
