@@ -4,7 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 from datetime import datetime, date, timedelta
-from database.crud import crud
+from database.crud import CRUDOperations
+
+crud = CRUDOperations()
 
 def create_revenue_chart(payments_df):
     """إنشاء مخطط الإيرادات"""
