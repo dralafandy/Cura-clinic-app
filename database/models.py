@@ -1,20 +1,35 @@
 import sqlite3
+import hashlib
+from datetime import datetime, date
+import os
 
 class Database:
-    def __init__(self, db_name="clinic.db"):
-        self.db_name = db_name
-        self.create_tables()
-
-    def get_connection(self):
-        """Get a connection to the database."""
-        return sqlite3.connect(self.db_name)
-
-    def create_tables(self):
-        """Create all necessary tables."""
-        conn = self.get_connection()
+    def __init__(self, db_path="clinic.db"):
+        self.db_path = db_path
+        self.init_database()
+    
+    def init_database(self):
+        """إنشاء قاعدة البيانات والجداول"""
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-
-        # Patients table
+        
+        # جدول الأطباء
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS doctors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                specialization TEXT NOT NULL,
+                phone TEXT,
+                email TEXT,
+                address TEXT,
+                hire_date DATE,
+                salary REAL,
+                commission_rate REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # جدول المرضى
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS patients (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,106 +40,78 @@ class Database:
                 date_of_birth DATE,
                 gender TEXT,
                 medical_history TEXT,
-                emergency_contact TEXT
+                emergency_contact TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-
-        # Doctors table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS doctors (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                specialization TEXT,
-                phone TEXT,
-                email TEXT,
-                commission_rate REAL
-            )
-        ''')
-
-        # Treatments table
+        
+        # جدول العلاجات والخدمات
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS treatments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                base_price REAL,
-                commission_rate REAL,
-                notes TEXT
+                description TEXT,
+                base_price REAL NOT NULL,
+                duration_minutes INTEGER,
+                category TEXT,
+                is_active BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-
-        # Appointments table
+        
+        # جدول المواعيد
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS appointments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_id INTEGER,
-                doctor_id INTEGER,
-                appointment_date DATE,
-                appointment_time TEXT,
-                status TEXT,
-                total_cost REAL,
-                commission_rate REAL,
-                notes TEXT,
-                FOREIGN KEY (patient_id) REFERENCES patients(id),
-                FOREIGN KEY (doctor_id) REFERENCES doctors(id)
-            )
-        ''')
-
-        # Appointment-Treatments junction table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS appointment_treatments (
-                appointment_id INTEGER,
+                patient_id INTEGER NOT NULL,
+                doctor_id INTEGER NOT NULL,
                 treatment_id INTEGER,
-                PRIMARY KEY (appointment_id, treatment_id),
-                FOREIGN KEY (appointment_id) REFERENCES appointments(id),
-                FOREIGN KEY (treatment_id) REFERENCES treatments(id)
+                appointment_date DATE NOT NULL,
+                appointment_time TIME NOT NULL,
+                status TEXT DEFAULT 'مجدول',
+                notes TEXT,
+                total_cost REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (patient_id) REFERENCES patients (id),
+                FOREIGN KEY (doctor_id) REFERENCES doctors (id),
+                FOREIGN KEY (treatment_id) REFERENCES treatments (id)
             )
         ''')
-
-        # Expenses table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS expenses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT,
-                description TEXT,
-                amount REAL,
-                expense_date DATE,
-                payment_method TEXT,
-                receipt_number TEXT,
-                notes TEXT
-            )
-        ''')
-
-        # Payments table
+        
+        # جدول المدفوعات
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 appointment_id INTEGER,
-                patient_id INTEGER,
-                amount REAL,
-                payment_method TEXT,
-                payment_date DATE,
-                status TEXT,
+                patient_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                payment_method TEXT NOT NULL,
+                payment_date DATE NOT NULL,
+                status TEXT DEFAULT 'مكتمل',
                 notes TEXT,
-                FOREIGN KEY (appointment_id) REFERENCES appointments(id),
-                FOREIGN KEY (patient_id) REFERENCES patients(id)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (appointment_id) REFERENCES appointments (id),
+                FOREIGN KEY (patient_id) REFERENCES patients (id)
             )
         ''')
-
-        # Inventory table
+        
+        # جدول المخزون والخامات
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 item_name TEXT NOT NULL,
-                quantity INTEGER,
-                min_stock_level INTEGER,
+                category TEXT,
+                quantity INTEGER NOT NULL DEFAULT 0,
                 unit_price REAL,
+                min_stock_level INTEGER DEFAULT 10,
                 supplier_id INTEGER,
-                notes TEXT,
-                FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+                expiry_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (supplier_id) REFERENCES suppliers (id)
             )
         ''')
-
-        # Suppliers table
+        
+        # جدول الموردين
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS suppliers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,9 +120,101 @@ class Database:
                 phone TEXT,
                 email TEXT,
                 address TEXT,
-                notes TEXT
+                payment_terms TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-
+        
+        # جدول المصروفات
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                expense_date DATE NOT NULL,
+                payment_method TEXT,
+                receipt_number TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # جدول استخدام المخزون
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS inventory_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inventory_id INTEGER NOT NULL,
+                appointment_id INTEGER,
+                quantity_used INTEGER NOT NULL,
+                usage_date DATE NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (inventory_id) REFERENCES inventory (id),
+                FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+            )
+        ''')
+        
         conn.commit()
         conn.close()
+        
+        # إضافة بيانات تجريبية إذا كانت قاعدة البيانات فارغة
+        self.add_sample_data()
+    
+    def add_sample_data(self):
+        """إضافة بيانات تجريبية"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # التحقق من وجود بيانات
+        cursor.execute("SELECT COUNT(*) FROM doctors")
+        if cursor.fetchone()[0] == 0:
+            # إضافة أطباء تجريبيين
+            sample_doctors = [
+                ("د. أحمد محمد", "طب الأسنان العام", "01234567890", "ahmed@clinic.com", "القاهرة", "2023-01-01", 15000.0, 10.0),
+                ("د. فاطمة علي", "تقويم الأسنان", "01234567891", "fatma@clinic.com", "الجيزة", "2023-02-01", 18000.0, 15.0),
+                ("د. محمد حسن", "جراحة الفم والوجه", "01234567892", "mohamed@clinic.com", "الإسكندرية", "2023-03-01", 20000.0, 20.0)
+            ]
+            
+            cursor.executemany('''
+                INSERT INTO doctors (name, specialization, phone, email, address, hire_date, salary, commission_rate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', sample_doctors)
+            
+            # إضافة علاجات تجريبية
+            sample_treatments = [
+                ("فحص وتنظيف", "فحص شامل وتنظيف الأسنان", 200.0, 60, "وقائي"),
+                ("حشو عادي", "حشو الأسنان بالحشو الأبيض", 300.0, 45, "علاجي"),
+                ("حشو عصب", "علاج عصب السن", 800.0, 120, "علاجي"),
+                ("خلع سن", "خلع السن", 150.0, 30, "جراحي"),
+                ("تركيب تقويم", "تركيب جهاز تقويم الأسنان", 5000.0, 90, "تقويمي")
+            ]
+            
+            cursor.executemany('''
+                INSERT INTO treatments (name, description, base_price, duration_minutes, category)
+                VALUES (?, ?, ?, ?, ?)
+            ''', sample_treatments)
+            
+            # إضافة مخزون تجريبي
+            sample_inventory = [
+                ("قفازات طبية", "مستهلكات", 100, 0.5, 20, None, None),
+                ("كمامات طبية", "مستهلكات", 200, 0.3, 50, None, None),
+                ("حقن التخدير", "أدوية", 50, 15.0, 10, None, "2025-12-31"),
+                ("حشوات بيضاء", "مواد علاجية", 30, 25.0, 5, None, "2025-06-30"),
+                ("خيوط جراحية", "أدوات جراحية", 20, 8.0, 5, None, None)
+            ]
+            
+            cursor.executemany('''
+                INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', sample_inventory)
+        
+        conn.commit()
+        conn.close()
+    
+    def get_connection(self):
+        """الحصول على اتصال بقاعدة البيانات"""
+        return sqlite3.connect(self.db_path)
+
+# إنشاء مثيل من قاعدة البيانات
+db = Database()
