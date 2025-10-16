@@ -45,7 +45,7 @@ class Database:
             )
         ''')
         
-        # جدول العلاجات والخدمات
+        # جدول العلاجات مع نسبة العمولة
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS treatments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,6 +54,7 @@ class Database:
                 base_price REAL NOT NULL,
                 duration_minutes INTEGER,
                 category TEXT,
+                commission_rate REAL DEFAULT 0.0,  # نسبة العمولة للطبيب حسب العلاج
                 is_active BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -181,18 +182,18 @@ class Database:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', sample_doctors)
             
-            # إضافة علاجات تجريبية
+            # إضافة علاجات تجريبية مع commission_rate
             sample_treatments = [
-                ("فحص وتنظيف", "فحص شامل وتنظيف الأسنان", 200.0, 60, "وقائي"),
-                ("حشو عادي", "حشو الأسنان بالحشو الأبيض", 300.0, 45, "علاجي"),
-                ("حشو عصب", "علاج عصب السن", 800.0, 120, "علاجي"),
-                ("خلع سن", "خلع السن", 150.0, 30, "جراحي"),
-                ("تركيب تقويم", "تركيب جهاز تقويم الأسنان", 5000.0, 90, "تقويمي")
+                ("فحص وتنظيف", "فحص شامل وتنظيف الأسنان", 200.0, 60, "وقائي", 10.0),
+                ("حشو عادي", "حشو الأسنان بالحشو الأبيض", 300.0, 45, "علاجي", 15.0),
+                ("حشو عصب", "علاج عصب السن", 800.0, 120, "علاجي", 20.0),
+                ("خلع سن", "خلع السن", 150.0, 30, "جراحي", 25.0),
+                ("تركيب تقويم", "تركيب جهاز تقويم الأسنان", 5000.0, 90, "تقويمي", 30.0)
             ]
             
             cursor.executemany('''
-                INSERT INTO treatments (name, description, base_price, duration_minutes, category)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO treatments (name, description, base_price, duration_minutes, category, commission_rate)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', sample_treatments)
             
             # إضافة مخزون تجريبي
