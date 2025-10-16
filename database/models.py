@@ -18,7 +18,7 @@ class Database:
         if not self._initialized:
             try:
                 with sqlite3.connect(self.db_path) as conn:
-                    conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key constraints
+                    conn.execute("PRAGMA foreign_keys = ON")
                     cursor = conn.cursor()
                     
                     # جدول الأطباء
@@ -53,7 +53,7 @@ class Database:
                         )
                     ''')
                     
-                    # جدول العلاجات والخدمات
+                    # جدول العلاجات
                     cursor.execute('''
                         CREATE TABLE IF NOT EXISTS treatments (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,8 +114,7 @@ class Database:
                             min_stock_level INTEGER DEFAULT 10,
                             supplier_id INTEGER,
                             expiry_date DATE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (supplier_id) REFERENCES suppliers (id)
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     ''')
                     
@@ -145,21 +144,6 @@ class Database:
                             receipt_number TEXT,
                             notes TEXT,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    
-                    # جدول استخدام المخزون
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS inventory_usage (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            inventory_id INTEGER NOT NULL,
-                            appointment_id INTEGER,
-                            quantity_used INTEGER NOT NULL,
-                            usage_date DATE NOT NULL,
-                            notes TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (inventory_id) REFERENCES inventory (id),
-                            FOREIGN KEY (appointment_id) REFERENCES appointments (id)
                         )
                     ''')
                     
@@ -203,16 +187,16 @@ class Database:
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
                           (2, 2, 2, tomorrow, "14:00", 300.0))
             
-            # موردين (insert suppliers first)
-            cursor.execute('INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms) VALUES (?, ?, ?, ?, ?, ?)',
-                          ("شركة المستلزمات", "علي عبدالله", "01234567894", "supplies@co.com", "القاهرة", "آجل 30 يوم"))
-            
-            # مخزون (now safe to insert with supplier_id = 1)
+            # مخزون
             sample_inventory = [
-                ("قفازات طبية", "مستهلكات", 100, 0.5, 20, 1, "2025-12-31"),
-                ("حقن تخدير", "أدوية", 50, 15.0, 10, 1, "2025-06-30")
+                ("قفازات طبية", "مستهلكات", 100, 0.5, 20, None, "2025-12-31"),
+                ("حقن تخدير", "أدوية", 50, 15.0, 10, None, "2025-06-30")
             ]
             cursor.executemany('INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?)', sample_inventory)
+            
+            # موردين
+            cursor.execute('INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms) VALUES (?, ?, ?, ?, ?, ?)',
+                          ("شركة المستلزمات", "علي عبدالله", "01234567894", "supplies@co.com", "القاهرة", "آجل 30 يوم"))
             
             # مصروفات
             cursor.execute('INSERT INTO expenses (category, description, amount, expense_date, payment_method) VALUES (?, ?, ?, ?, ?)',
@@ -222,6 +206,6 @@ class Database:
         """الحصول على اتصال بقاعدة البيانات"""
         return sqlite3.connect(self.db_path)
 
-# تأخير التهيئة حتى الاستدعاء الصريح
+# إنشاء وتهيئة قاعدة البيانات
 db = Database()
 db.initialize()
