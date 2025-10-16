@@ -1,6 +1,6 @@
 import sqlite3
 import pandas as pd
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from .models import db
 
 class CRUDOperations:
@@ -39,6 +39,28 @@ class CRUDOperations:
         conn.close()
         return result
     
+    def update_doctor(self, doctor_id, name, specialization, phone, email, address, salary, commission_rate):
+        """تحديث بيانات طبيب"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE doctors 
+            SET name=?, specialization=?, phone=?, email=?, address=?, salary=?, commission_rate=?
+            WHERE id=?
+        ''', (name, specialization, phone, email, address, salary, commission_rate, doctor_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def delete_doctor(self, doctor_id):
+        """حذف طبيب"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM doctors WHERE id = ?", (doctor_id,))
+        conn.commit()
+        conn.close()
+    
     # ========== عمليات المرضى ==========
     def create_patient(self, name, phone, email, address, date_of_birth, gender, medical_history="", emergency_contact=""):
         """إضافة مريض جديد"""
@@ -62,13 +84,90 @@ class CRUDOperations:
         conn.close()
         return df
     
+    def get_patient_by_id(self, patient_id):
+        """الحصول على مريض بواسطة ID"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM patients WHERE id = ?", (patient_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result
+    
+    def update_patient(self, patient_id, name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact):
+        """تحديث بيانات مريض"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE patients 
+            SET name=?, phone=?, email=?, address=?, date_of_birth=?, gender=?, medical_history=?, emergency_contact=?
+            WHERE id=?
+        ''', (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact, patient_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def delete_patient(self, patient_id):
+        """حذف مريض"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
+        conn.commit()
+        conn.close()
+    
     # ========== عمليات العلاجات ==========
+    def create_treatment(self, name, description, base_price, duration_minutes, category):
+        """إضافة علاج جديد"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO treatments (name, description, base_price, duration_minutes, category)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (name, description, base_price, duration_minutes, category))
+        
+        treatment_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return treatment_id
+    
     def get_all_treatments(self):
         """الحصول على جميع العلاجات"""
         conn = self.db.get_connection()
         df = pd.read_sql_query("SELECT * FROM treatments WHERE is_active = 1 ORDER BY name", conn)
         conn.close()
         return df
+    
+    def get_treatment_by_id(self, treatment_id):
+        """الحصول على علاج بواسطة ID"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM treatments WHERE id = ?", (treatment_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result
+    
+    def update_treatment(self, treatment_id, name, description, base_price, duration_minutes, category):
+        """تحديث علاج"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE treatments 
+            SET name=?, description=?, base_price=?, duration_minutes=?, category=?
+            WHERE id=?
+        ''', (name, description, base_price, duration_minutes, category, treatment_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def delete_treatment(self, treatment_id):
+        """حذف علاج (إلغاء تفعيل)"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE treatments SET is_active = 0 WHERE id = ?", (treatment_id,))
+        conn.commit()
+        conn.close()
     
     # ========== عمليات المواعيد ==========
     def create_appointment(self, patient_id, doctor_id, treatment_id, appointment_date, appointment_time, notes="", total_cost=0.0):
@@ -87,7 +186,7 @@ class CRUDOperations:
         return appointment_id
     
     def get_all_appointments(self):
-        """الحصول على جميع المواعيد"""
+        """الحصول على جميع المواعيد مع تفاصيل المريض والطبيب والعلاج"""
         conn = self.db.get_connection()
         query = '''
             SELECT 
@@ -216,16 +315,30 @@ class CRUDOperations:
         conn.close()
         return df
     
-    def get_expired_items(self):
-        """الحصول على العناصر المنتهية الصلاحية"""
+    def update_inventory_quantity(self, item_id, quantity):
+        """تحديث كمية المخزون"""
         conn = self.db.get_connection()
-        today = date.today().isoformat()
-        query = "SELECT * FROM inventory WHERE expiry_date < ? ORDER BY expiry_date"
-        df = pd.read_sql_query(query, conn, params=(today,))
+        cursor = conn.cursor()
+        cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (quantity, item_id))
+        conn.commit()
         conn.close()
-        return df
     
     # ========== عمليات الموردين ==========
+    def create_supplier(self, name, contact_person, phone, email, address, payment_terms):
+        """إضافة مورد جديد"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (name, contact_person, phone, email, address, payment_terms))
+        
+        supplier_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return supplier_id
+    
     def get_all_suppliers(self):
         """الحصول على جميع الموردين"""
         conn = self.db.get_connection()
@@ -271,23 +384,15 @@ class CRUDOperations:
         if start_date and end_date:
             expenses_query += f" WHERE expense_date BETWEEN '{start_date}' AND '{end_date}'"
         
-        # عدد المواعيد
-        appointments_query = "SELECT COUNT(*) as total_appointments FROM appointments"
-        if start_date and end_date:
-            appointments_query += f" WHERE appointment_date BETWEEN '{start_date}' AND '{end_date}'"
-        
         total_payments = pd.read_sql_query(payments_query, conn).iloc[0]['total_payments']
         total_expenses = pd.read_sql_query(expenses_query, conn).iloc[0]['total_expenses']
-        total_appointments = pd.read_sql_query(appointments_query, conn).iloc[0]['total_appointments']
         
         conn.close()
         
         return {
             'total_revenue': total_payments,
             'total_expenses': total_expenses,
-            'net_profit': total_payments - total_expenses,
-            'total_appointments': total_appointments,
-            'revenue_per_appointment': total_payments / total_appointments if total_appointments > 0 else 0
+            'net_profit': total_payments - total_expenses
         }
     
     def get_daily_appointments_count(self):
