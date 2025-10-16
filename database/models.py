@@ -17,7 +17,7 @@ class Database:
         if not self._initialized:
             try:
                 with sqlite3.connect(self.db_path) as conn:
-                    conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key constraints
+                    conn.execute("PRAGMA foreign_keys = ON")
                     cursor = conn.cursor()
                     
                     # جدول الأطباء
@@ -32,6 +32,7 @@ class Database:
                             hire_date DATE,
                             salary REAL,
                             commission_rate REAL DEFAULT 0.0,
+                            is_active BOOLEAN DEFAULT 1,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     ''')
@@ -48,11 +49,15 @@ class Database:
                             gender TEXT,
                             medical_history TEXT,
                             emergency_contact TEXT,
+                            blood_type TEXT,
+                            allergies TEXT,
+                            notes TEXT,
+                            is_active BOOLEAN DEFAULT 1,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     ''')
                     
-                    # جدول العلاجات والخدمات
+                    # جدول العلاجات
                     cursor.execute('''
                         CREATE TABLE IF NOT EXISTS treatments (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,12 +66,14 @@ class Database:
                             base_price REAL NOT NULL,
                             duration_minutes INTEGER,
                             category TEXT,
+                            doctor_percentage REAL DEFAULT 50.0,
+                            clinic_percentage REAL DEFAULT 50.0,
                             is_active BOOLEAN DEFAULT 1,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     ''')
                     
-                    # جدول الموردين - يجب إنشاؤه قبل المخزون
+                    # جدول الموردين
                     cursor.execute('''
                         CREATE TABLE IF NOT EXISTS suppliers (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +83,7 @@ class Database:
                             email TEXT,
                             address TEXT,
                             payment_terms TEXT,
+                            is_active BOOLEAN DEFAULT 1,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     ''')
@@ -92,6 +100,7 @@ class Database:
                             status TEXT DEFAULT 'مجدول',
                             notes TEXT,
                             total_cost REAL,
+                            reminder_sent BOOLEAN DEFAULT 0,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             FOREIGN KEY (patient_id) REFERENCES patients (id),
                             FOREIGN KEY (doctor_id) REFERENCES doctors (id),
@@ -109,6 +118,10 @@ class Database:
                             payment_method TEXT NOT NULL,
                             payment_date DATE NOT NULL,
                             status TEXT DEFAULT 'مكتمل',
+                            doctor_share REAL DEFAULT 0.0,
+                            clinic_share REAL DEFAULT 0.0,
+                            doctor_percentage REAL DEFAULT 0.0,
+                            clinic_percentage REAL DEFAULT 0.0,
                             notes TEXT,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             FOREIGN KEY (appointment_id) REFERENCES appointments (id),
@@ -127,6 +140,9 @@ class Database:
                             min_stock_level INTEGER DEFAULT 10,
                             supplier_id INTEGER,
                             expiry_date DATE,
+                            location TEXT,
+                            barcode TEXT,
+                            is_active BOOLEAN DEFAULT 1,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             FOREIGN KEY (supplier_id) REFERENCES suppliers (id)
                         )
@@ -143,6 +159,8 @@ class Database:
                             payment_method TEXT,
                             receipt_number TEXT,
                             notes TEXT,
+                            approved_by TEXT,
+                            is_recurring BOOLEAN DEFAULT 0,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     ''')
@@ -162,9 +180,35 @@ class Database:
                         )
                     ''')
                     
+                    # جدول الإعدادات
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS settings (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            key TEXT UNIQUE NOT NULL,
+                            value TEXT,
+                            description TEXT,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    
+                    # جدول سجل الأنشطة
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS activity_log (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            action TEXT NOT NULL,
+                            table_name TEXT,
+                            record_id INTEGER,
+                            details TEXT,
+                            user_name TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    
                     # إضافة بيانات تجريبية
                     self.add_sample_data(conn, cursor)
+                    self.add_default_settings(conn, cursor)
                     self._initialized = True
+                    
             except sqlite3.Error as e:
                 print(f"Database initialization error: {e}")
                 raise
@@ -177,50 +221,52 @@ class Database:
                 
                 # 1️⃣ أطباء
                 sample_doctors = [
-                    ("د. أحمد محمد", "طب الأسنان العام", "01234567890", "ahmed@clinic.com", "القاهرة", "2023-01-01", 15000.0, 10.0),
-                    ("د. فاطمة علي", "تقويم الأسنان", "01234567891", "fatma@clinic.com", "الجيزة", "2023-02-01", 18000.0, 15.0),
-                    ("د. محمود حسن", "جراحة الفم والأسنان", "01234567892", "mahmoud@clinic.com", "القاهرة", "2023-03-01", 20000.0, 12.0)
+                    ("د. أحمد محمد", "طب الأسنان العام", "01234567890", "ahmed@clinic.com", "القاهرة", "2023-01-01", 15000.0, 10.0, 1),
+                    ("د. فاطمة علي", "تقويم الأسنان", "01234567891", "fatma@clinic.com", "الجيزة", "2023-02-01", 18000.0, 15.0, 1),
+                    ("د. محمود حسن", "جراحة الفم والأسنان", "01234567892", "mahmoud@clinic.com", "القاهرة", "2023-03-01", 20000.0, 12.0, 1)
                 ]
                 cursor.executemany('''
-                    INSERT INTO doctors (name, specialization, phone, email, address, hire_date, salary, commission_rate) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO doctors (name, specialization, phone, email, address, hire_date, salary, commission_rate, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_doctors)
                 
                 # 2️⃣ مرضى
                 sample_patients = [
-                    ("محمد علي", "01234567892", "mohamed@patient.com", "القاهرة، مدينة نصر", "1990-05-15", "ذكر", "لا يوجد", "01012345678"),
-                    ("سارة حسن", "01234567893", "sarah@patient.com", "الجيزة، الدقي", "1995-08-20", "أنثى", "حساسية من البنسلين", "01012345679"),
-                    ("أحمد كمال", "01234567894", "ahmed@patient.com", "القاهرة، مصر الجديدة", "1988-03-10", "ذكر", "ضغط دم مرتفع", "01012345680"),
-                    ("منى إبراهيم", "01234567895", "mona@patient.com", "الجيزة، المهندسين", "1992-11-25", "أنثى", "لا يوجد", "01012345681")
+                    ("محمد علي", "01234567892", "mohamed@patient.com", "القاهرة، مدينة نصر", "1990-05-15", "ذكر", "لا يوجد", "01012345678", "A+", "لا يوجد", "", 1),
+                    ("سارة حسن", "01234567893", "sarah@patient.com", "الجيزة، الدقي", "1995-08-20", "أنثى", "حساسية من البنسلين", "01012345679", "O+", "بنسلين", "", 1),
+                    ("أحمد كمال", "01234567894", "ahmed@patient.com", "القاهرة، مصر الجديدة", "1988-03-10", "ذكر", "ضغط دم مرتفع", "01012345680", "B+", "لا يوجد", "", 1),
+                    ("منى إبراهيم", "01234567895", "mona@patient.com", "الجيزة، المهندسين", "1992-11-25", "أنثى", "لا يوجد", "01012345681", "AB+", "لا يوجد", "", 1)
                 ]
                 cursor.executemany('''
-                    INSERT INTO patients (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO patients (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact, blood_type, allergies, notes, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_patients)
                 
-                # 3️⃣ علاجات
+                # 3️⃣ علاجات مع نسب مختلفة
                 sample_treatments = [
-                    ("فحص وتنظيف", "فحص شامل للأسنان وتنظيف بالموجات فوق الصوتية", 200.0, 60, "وقائي"),
-                    ("حشو عادي", "حشو الأسنان بالحشو الأبيض", 300.0, 45, "علاجي"),
-                    ("حشو عصب", "علاج جذور الأسنان وحشو العصب", 800.0, 90, "علاجي"),
-                    ("تبييض الأسنان", "تبييض الأسنان بالليزر", 1500.0, 120, "تجميلي"),
-                    ("خلع سن", "خلع الأسنان البسيط", 150.0, 30, "جراحي"),
-                    ("تركيب تقويم", "تركيب تقويم الأسنان الثابت", 5000.0, 180, "تجميلي")
+                    ("فحص وتنظيف", "فحص شامل للأسنان وتنظيف بالموجات فوق الصوتية", 200.0, 60, "وقائي", 40.0, 60.0, 1),
+                    ("حشو عادي", "حشو الأسنان بالحشو الأبيض", 300.0, 45, "علاجي", 50.0, 50.0, 1),
+                    ("حشو عصب", "علاج جذور الأسنان وحشو العصب", 800.0, 90, "علاجي", 60.0, 40.0, 1),
+                    ("تبييض الأسنان", "تبييض الأسنان بالليزر", 1500.0, 120, "تجميلي", 70.0, 30.0, 1),
+                    ("خلع سن", "خلع الأسنان البسيط", 150.0, 30, "جراحي", 45.0, 55.0, 1),
+                    ("تركيب تقويم", "تركيب تقويم الأسنان الثابت", 5000.0, 180, "تجميلي", 65.0, 35.0, 1),
+                    ("أشعة بانوراما", "أشعة بانوراما للفكين", 250.0, 30, "تشخيصي", 30.0, 70.0, 1),
+                    ("تنظيف الجير", "إزالة الجير وتلميع الأسنان", 180.0, 45, "وقائي", 40.0, 60.0, 1)
                 ]
                 cursor.executemany('''
-                    INSERT INTO treatments (name, description, base_price, duration_minutes, category) 
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO treatments (name, description, base_price, duration_minutes, category, doctor_percentage, clinic_percentage, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_treatments)
                 
-                # 4️⃣ موردين - يجب قبل المخزون
+                # 4️⃣ موردين
                 sample_suppliers = [
-                    ("شركة المستلزمات الطبية", "علي عبدالله", "01234567896", "supplies@medical.com", "القاهرة، وسط البلد", "آجل 30 يوم"),
-                    ("مؤسسة الأدوات الطبية", "محمد صلاح", "01234567897", "info@medtools.com", "الجيزة، المهندسين", "نقدي"),
-                    ("شركة الأدوية والمستلزمات", "هدى أحمد", "01234567898", "contact@pharmaco.com", "القاهرة، مصر الجديدة", "آجل 60 يوم")
+                    ("شركة المستلزمات الطبية", "علي عبدالله", "01234567896", "supplies@medical.com", "القاهرة، وسط البلد", "آجل 30 يوم", 1),
+                    ("مؤسسة الأدوات الطبية", "محمد صلاح", "01234567897", "info@medtools.com", "الجيزة، المهندسين", "نقدي", 1),
+                    ("شركة الأدوية والمستلزمات", "هدى أحمد", "01234567898", "contact@pharmaco.com", "القاهرة، مصر الجديدة", "آجل 60 يوم", 1)
                 ]
                 cursor.executemany('''
-                    INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms) 
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', sample_suppliers)
                 
                 # 5️⃣ مواعيد
@@ -230,45 +276,45 @@ class Database:
                 next_week = today + timedelta(days=7)
                 
                 sample_appointments = [
-                    (1, 1, 1, yesterday.isoformat(), "09:00", "مكتمل", "فحص دوري", 200.0),
-                    (2, 2, 2, yesterday.isoformat(), "11:00", "مكتمل", "", 300.0),
-                    (3, 1, 1, today.isoformat(), "10:00", "مؤكد", "", 200.0),
-                    (4, 3, 5, today.isoformat(), "14:00", "مجدول", "خلع ضرس العقل", 150.0),
-                    (1, 2, 3, tomorrow.isoformat(), "09:30", "مؤكد", "", 800.0),
-                    (2, 1, 4, next_week.isoformat(), "15:00", "مجدول", "تبييض كامل", 1500.0)
+                    (1, 1, 1, yesterday.isoformat(), "09:00", "مكتمل", "فحص دوري", 200.0, 1),
+                    (2, 2, 2, yesterday.isoformat(), "11:00", "مكتمل", "", 300.0, 1),
+                    (3, 1, 1, today.isoformat(), "10:00", "مؤكد", "", 200.0, 0),
+                    (4, 3, 5, today.isoformat(), "14:00", "مجدول", "خلع ضرس العقل", 150.0, 0),
+                    (1, 2, 3, tomorrow.isoformat(), "09:30", "مؤكد", "", 800.0, 0),
+                    (2, 1, 4, next_week.isoformat(), "15:00", "مجدول", "تبييض كامل", 1500.0, 0)
                 ]
                 cursor.executemany('''
-                    INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, status, notes, total_cost) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, status, notes, total_cost, reminder_sent) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_appointments)
                 
-                # 6️⃣ مخزون - بعد الموردين
+                # 6️⃣ مخزون
                 sample_inventory = [
-                    ("قفازات طبية (علبة 100 قطعة)", "مستهلكات", 50, 25.0, 20, 1, "2026-12-31"),
-                    ("كمامات طبية (علبة 50 قطعة)", "مستهلكات", 40, 15.0, 15, 1, "2026-06-30"),
-                    ("حقن تخدير موضعي", "أدوية", 100, 12.0, 30, 3, "2025-12-31"),
-                    ("خيوط جراحية", "مستهلكات", 80, 8.0, 25, 2, "2027-01-31"),
-                    ("حشو أبيض (كمبوزيت)", "مواد طبية", 30, 150.0, 10, 2, "2026-08-31"),
-                    ("مطهر طبي (ليتر)", "مستهلكات", 25, 45.0, 10, 1, "2025-09-30"),
-                    ("إبر حقن", "مستهلكات", 200, 0.5, 50, 1, "2026-03-31"),
-                    ("قطن طبي (كيلو)", "مستهلكات", 15, 35.0, 5, 1, "2027-12-31"),
-                    ("شاش معقم", "مستهلكات", 60, 5.0, 20, 1, "2026-11-30"),
-                    ("معجون أسنان طبي", "منتجات", 100, 25.0, 30, 3, "2026-05-31")
+                    ("قفازات طبية (علبة 100 قطعة)", "مستهلكات", 50, 25.0, 20, 1, "2026-12-31", "مخزن A", "BAR001", 1),
+                    ("كمامات طبية (علبة 50 قطعة)", "مستهلكات", 40, 15.0, 15, 1, "2026-06-30", "مخزن A", "BAR002", 1),
+                    ("حقن تخدير موضعي", "أدوية", 100, 12.0, 30, 3, "2025-12-31", "ثلاجة الأدوية", "BAR003", 1),
+                    ("خيوط جراحية", "مستهلكات", 80, 8.0, 25, 2, "2027-01-31", "مخزن B", "BAR004", 1),
+                    ("حشو أبيض (كمبوزيت)", "مواد طبية", 30, 150.0, 10, 2, "2026-08-31", "مخزن B", "BAR005", 1),
+                    ("مطهر طبي (ليتر)", "مستهلكات", 25, 45.0, 10, 1, "2025-09-30", "مخزن A", "BAR006", 1),
+                    ("إبر حقن", "مستهلكات", 200, 0.5, 50, 1, "2026-03-31", "مخزن A", "BAR007", 1),
+                    ("قطن طبي (كيلو)", "مستهلكات", 15, 35.0, 5, 1, "2027-12-31", "مخزن A", "BAR008", 1),
+                    ("شاش معقم", "مستهلكات", 60, 5.0, 20, 1, "2026-11-30", "مخزن A", "BAR009", 1),
+                    ("معجون أسنان طبي", "منتجات", 100, 25.0, 30, 3, "2026-05-31", "مخزن C", "BAR010", 1)
                 ]
                 cursor.executemany('''
-                    INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date, location, barcode, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_inventory)
                 
-                # 7️⃣ مدفوعات
+                # 7️⃣ مدفوعات مع التقسيم
                 sample_payments = [
-                    (1, 1, 200.0, "نقدي", yesterday.isoformat(), "مكتمل", ""),
-                    (2, 2, 300.0, "بطاقة ائتمان", yesterday.isoformat(), "مكتمل", ""),
-                    (None, 3, 500.0, "تحويل بنكي", (today - timedelta(days=3)).isoformat(), "مكتمل", "دفعة مقدمة للتقويم")
+                    (1, 1, 200.0, "نقدي", yesterday.isoformat(), "مكتمل", 80.0, 120.0, 40.0, 60.0, ""),
+                    (2, 2, 300.0, "بطاقة ائتمان", yesterday.isoformat(), "مكتمل", 150.0, 150.0, 50.0, 50.0, ""),
+                    (None, 3, 500.0, "تحويل بنكي", (today - timedelta(days=3)).isoformat(), "مكتمل", 0.0, 500.0, 0.0, 100.0, "دفعة مقدمة للتقويم")
                 ]
                 cursor.executemany('''
-                    INSERT INTO payments (appointment_id, patient_id, amount, payment_method, payment_date, status, notes) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO payments (appointment_id, patient_id, amount, payment_method, payment_date, status, doctor_share, clinic_share, doctor_percentage, clinic_percentage, notes) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_payments)
                 
                 # 8️⃣ مصروفات
@@ -276,16 +322,16 @@ class Database:
                 two_weeks_ago = today - timedelta(days=14)
                 
                 sample_expenses = [
-                    ("رواتب", "رواتب الأطباء - شهر سابق", 53000.0, last_month.isoformat(), "تحويل بنكي", "SAL-001", ""),
-                    ("إيجار", "إيجار العيادة - شهري", 8000.0, last_month.isoformat(), "تحويل بنكي", "RENT-001", ""),
-                    ("كهرباء ومياه", "فواتير الخدمات", 1500.0, two_weeks_ago.isoformat(), "نقدي", "UTIL-001", ""),
-                    ("صيانة", "صيانة جهاز الأشعة", 2500.0, two_weeks_ago.isoformat(), "نقدي", "MAINT-001", ""),
-                    ("مستلزمات", "شراء مستهلكات طبية", 4500.0, yesterday.isoformat(), "شيك", "SUP-001", "من شركة المستلزمات"),
-                    ("تسويق", "إعلانات على السوشيال ميديا", 1000.0, (today - timedelta(days=5)).isoformat(), "بطاقة ائتمان", "MKT-001", "")
+                    ("رواتب", "رواتب الأطباء - شهر سابق", 53000.0, last_month.isoformat(), "تحويل بنكي", "SAL-001", "", "الإدارة", 1),
+                    ("إيجار", "إيجار العيادة - شهري", 8000.0, last_month.isoformat(), "تحويل بنكي", "RENT-001", "", "الإدارة", 1),
+                    ("كهرباء ومياه", "فواتير الخدمات", 1500.0, two_weeks_ago.isoformat(), "نقدي", "UTIL-001", "", "الإدارة", 0),
+                    ("صيانة", "صيانة جهاز الأشعة", 2500.0, two_weeks_ago.isoformat(), "نقدي", "MAINT-001", "", "الإدارة", 0),
+                    ("مستلزمات", "شراء مستهلكات طبية", 4500.0, yesterday.isoformat(), "شيك", "SUP-001", "من شركة المستلزمات", "الإدارة", 0),
+                    ("تسويق", "إعلانات على السوشيال ميديا", 1000.0, (today - timedelta(days=5)).isoformat(), "بطاقة ائتمان", "MKT-001", "", "الإدارة", 0)
                 ]
                 cursor.executemany('''
-                    INSERT INTO expenses (category, description, amount, expense_date, payment_method, receipt_number, notes) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO expenses (category, description, amount, expense_date, payment_method, receipt_number, notes, approved_by, is_recurring) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', sample_expenses)
                 
                 # 9️⃣ استخدام المخزون
@@ -312,10 +358,93 @@ class Database:
             conn.rollback()
             raise
     
+    def add_default_settings(self, conn, cursor):
+        """إضافة الإعدادات الافتراضية"""
+        try:
+            cursor.execute("SELECT COUNT(*) FROM settings")
+            if cursor.fetchone()[0] == 0:
+                default_settings = [
+                    ("clinic_name", "عيادة Cura الطبية", "اسم العيادة"),
+                    ("clinic_address", "القاهرة، مصر", "عنوان العيادة"),
+                    ("clinic_phone", "01234567890", "هاتف العيادة"),
+                    ("clinic_email", "info@curaclinic.com", "بريد العيادة"),
+                    ("working_hours", "السبت - الخميس: 9 صباحاً - 9 مساءً", "ساعات العمل"),
+                    ("currency", "ج.م", "العملة"),
+                    ("tax_rate", "0", "نسبة الضريبة %"),
+                    ("reminder_days", "1", "عدد أيام التذكير قبل الموعد"),
+                    ("low_stock_alert", "1", "تفعيل تنبيهات المخزون المنخفض"),
+                    ("backup_enabled", "1", "تفعيل النسخ الاحتياطي التلقائي")
+                ]
+                cursor.executemany('''
+                    INSERT INTO settings (key, value, description) 
+                    VALUES (?, ?, ?)
+                ''', default_settings)
+                conn.commit()
+                print("✅ تم إضافة الإعدادات الافتراضية!")
+        except sqlite3.Error as e:
+            print(f"❌ خطأ في إضافة الإعدادات: {e}")
+    
+    def upgrade_schema(self):
+        """ترقية قاعدة البيانات بدون حذف البيانات"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # قائمة التعديلات للتحقق منها
+                alterations = [
+                    ("treatments", "doctor_percentage", "ALTER TABLE treatments ADD COLUMN doctor_percentage REAL DEFAULT 50.0"),
+                    ("treatments", "clinic_percentage", "ALTER TABLE treatments ADD COLUMN clinic_percentage REAL DEFAULT 50.0"),
+                    ("payments", "doctor_share", "ALTER TABLE payments ADD COLUMN doctor_share REAL DEFAULT 0.0"),
+                    ("payments", "clinic_share", "ALTER TABLE payments ADD COLUMN clinic_share REAL DEFAULT 0.0"),
+                    ("payments", "doctor_percentage", "ALTER TABLE payments ADD COLUMN doctor_percentage REAL DEFAULT 0.0"),
+                    ("payments", "clinic_percentage", "ALTER TABLE payments ADD COLUMN clinic_percentage REAL DEFAULT 0.0"),
+                    ("patients", "blood_type", "ALTER TABLE patients ADD COLUMN blood_type TEXT"),
+                    ("patients", "allergies", "ALTER TABLE patients ADD COLUMN allergies TEXT"),
+                    ("patients", "notes", "ALTER TABLE patients ADD COLUMN notes TEXT"),
+                    ("patients", "is_active", "ALTER TABLE patients ADD COLUMN is_active BOOLEAN DEFAULT 1"),
+                    ("doctors", "is_active", "ALTER TABLE doctors ADD COLUMN is_active BOOLEAN DEFAULT 1"),
+                    ("inventory", "location", "ALTER TABLE inventory ADD COLUMN location TEXT"),
+                    ("inventory", "barcode", "ALTER TABLE inventory ADD COLUMN barcode TEXT"),
+                    ("inventory", "is_active", "ALTER TABLE inventory ADD COLUMN is_active BOOLEAN DEFAULT 1"),
+                    ("suppliers", "is_active", "ALTER TABLE suppliers ADD COLUMN is_active BOOLEAN DEFAULT 1"),
+                    ("appointments", "reminder_sent", "ALTER TABLE appointments ADD COLUMN reminder_sent BOOLEAN DEFAULT 0"),
+                    ("expenses", "approved_by", "ALTER TABLE expenses ADD COLUMN approved_by TEXT"),
+                    ("expenses", "is_recurring", "ALTER TABLE expenses ADD COLUMN is_recurring BOOLEAN DEFAULT 0"),
+                ]
+                
+                for table_name, column_name, sql in alterations:
+                    try:
+                        cursor.execute(sql)
+                        print(f"✅ تم إضافة {column_name} إلى {table_name}")
+                    except sqlite3.OperationalError:
+                        pass  # العمود موجود مسبقاً
+                
+                conn.commit()
+                print("✅ تمت ترقية قاعدة البيانات بنجاح!")
+                
+        except sqlite3.Error as e:
+            print(f"❌ خطأ في ترقية قاعدة البيانات: {e}")
+    
     def get_connection(self):
         """الحصول على اتصال بقاعدة البيانات"""
         return sqlite3.connect(self.db_path)
+    
+    def backup_database(self, backup_path=None):
+        """إنشاء نسخة احتياطية من قاعدة البيانات"""
+        if backup_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"clinic_backup_{timestamp}.db"
+        
+        try:
+            import shutil
+            shutil.copy2(self.db_path, backup_path)
+            print(f"✅ تم إنشاء نسخة احتياطية: {backup_path}")
+            return backup_path
+        except Exception as e:
+            print(f"❌ خطأ في إنشاء النسخة الاحتياطية: {e}")
+            return None
 
-# إنشاء مثيل واحد من قاعدة البيانات
+# تهيئة قاعدة البيانات
 db = Database()
 db.initialize()
+db.upgrade_schema()
