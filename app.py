@@ -1,13 +1,13 @@
 import streamlit as st
-from pages.dashboard import show_dashboard
-from pages.appointments import show_appointments
-from pages.patients import show_patients
-from pages.doctors import show_doctors
-from pages.treatments import show_treatments
-from pages.inventory import show_inventory
-from pages.suppliers import show_suppliers
-from pages.expenses import show_expenses
-from pages.payments import show_payments
+from dashboard import show_dashboard
+from appointments import show_appointments
+from patients import show_patients
+from doctors import show_doctors
+from treatments import show_treatments
+from inventory import show_inventory
+from suppliers import show_suppliers
+from expenses import show_expenses
+from payments import show_payments
 
 def main():
     st.set_page_config(
