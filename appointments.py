@@ -91,6 +91,152 @@ def show_appointments_list():
     except Exception as e:
         show_error_message(f"خطأ في تحميل المواعيد: {str(e)}")
 
+def show_appointments_summary(appointments_df):
+    """عرض ملخص المواعيد"""
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_appointments = len(appointments_df)
+        st.metric("📅 إجمالي المواعيد", total_appointments)
+    
+    with col2:
+        confirmed_appointments = len(appointments_df[appointments_df['status'] == 'مؤكد'])
+        st.metric("✅ المؤكدة", confirmed_appointments)
+    
+    with col3:
+        completed_appointments = len(appointments_df[appointments_df['status'] == 'مكتمل'])
+        st.metric("✅ المكتملة", completed_appointments)
+    
+    with col4:
+        total_revenue = appointments_df['total_cost'].sum()
+        st.metric("💰 إجمالي الإيرادات", format_currency(total_revenue))
+
+def display_appointments_cards(appointments_df):
+    """عرض المواعيد في بطاقات محسنة"""
+    st.subheader("🎴 المواعيد القادمة")
+    
+    # ترتيب حسب التاريخ والوقت
+    appointments_df = appointments_df.sort_values(['appointment_date', 'appointment_time'])
+    
+    for _, appointment in appointments_df.iterrows():
+        status_color = get_status_color(appointment['status'])
+        
+        with st.container():
+            col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
+            
+            with col1:
+                st.markdown(f"""
+                <div style="padding: 10px; border-left: 4px solid {status_color};">
+                <strong>👤 {appointment['patient_name']}</strong><br>
+                📞 {appointment.get('patient_phone', 'غير محدد')}
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.write(f"👨‍⚕️ **{appointment['doctor_name']}**")
+                st.write(f"💊 {appointment['treatment_name']}")
+                st.write(f"📅 {appointment['appointment_date']}")
+            
+            with col3:
+                st.write(f"🕐 **{appointment['appointment_time']}**")
+                st.write(f"💰 {format_currency(appointment['total_cost'])}")
+            
+            with col4:
+                st.markdown(f"""
+                <div style="text-align: center;">
+                <span style="color: {status_color}; font-weight: bold;">
+                ● {appointment['status']}
+                </span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col5:
+                # أزرار الإجراءات
+                col_btn1, col_btn2 = st.columns(2)
+                
+                with col_btn1:
+                    if st.button(f"✏️", key=f"edit_{appointment['id']}", help="تعديل"):
+                        edit_appointment(appointment['id'])
+                
+                with col_btn2:
+                    if st.button(f"🔄", key=f"status_{appointment['id']}", help="تغيير الحالة"):
+                        st.session_state[f'manage_status_{appointment["id"]}'] = True
+        
+        st.divider()
+
+def display_appointments_table(appointments_df):
+    """عرض جدول المواعيد التفصيلي"""
+    st.dataframe(
+        appointments_df[['patient_name', 'doctor_name', 'treatment_name', 
+                        'appointment_date', 'appointment_time', 'status', 'total_cost']],
+        column_config={
+            'patient_name': 'اسم المريض',
+            'doctor_name': 'اسم الطبيب',
+            'treatment_name': 'العلاج',
+            'appointment_date': 'التاريخ',
+            'appointment_time': 'الوقت',
+            'status': 'الحالة',
+            'total_cost': st.column_config.NumberColumn(
+                'التكلفة',
+                format="%.2f ج.م"
+            )
+        },
+        use_container_width=True,
+        hide_index=True
+    )
+
+def apply_appointments_filters(appointments_df, date_filter, doctor_filter, status_filter, search_name, custom_start=None, custom_end=None):
+    """تطبيق فلاتر المواعيد"""
+    filtered_df = appointments_df.copy()
+    
+    # فلترة حسب التاريخ
+    if date_filter != "الكل":
+        today = date.today()
+        
+        if date_filter == "اليوم":
+            target_date = today
+            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
+            filtered_df = filtered_df[filtered_df['appointment_date'] == target_date]
+        elif date_filter == "غداً":
+            target_date = today + timedelta(days=1)
+            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
+            filtered_df = filtered_df[filtered_df['appointment_date'] == target_date]
+        elif date_filter == "هذا الأسبوع":
+            start_of_week = today - timedelta(days=today.weekday())
+            end_of_week = start_of_week + timedelta(days=6)
+            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
+            filtered_df = filtered_df[
+                (filtered_df['appointment_date'] >= start_of_week) & 
+                (filtered_df['appointment_date'] <= end_of_week)
+            ]
+        elif date_filter == "هذا الشهر":
+            start_of_month = today.replace(day=1)
+            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
+            filtered_df = filtered_df[
+                (filtered_df['appointment_date'] >= start_of_month) & 
+                (filtered_df['appointment_date'] <= today)
+            ]
+        elif date_filter == "مخصص" and custom_start and custom_end:
+            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
+            filtered_df = filtered_df[
+                (filtered_df['appointment_date'] >= custom_start) & 
+                (filtered_df['appointment_date'] <= custom_end)
+            ]
+    
+    # فلترة حسب الطبيب
+    if doctor_filter != "الكل":
+        filtered_df = filtered_df[filtered_df['doctor_name'] == doctor_filter]
+    
+    # فلترة حسب الحالة
+    if status_filter != "الكل":
+        filtered_df = filtered_df[filtered_df['status'] == status_filter]
+    
+    # بحث حسب اسم المريض
+    if search_name:
+        filtered_df = filtered_df[filtered_df['patient_name'].str.contains(search_name, case=False, na=False)]
+    
+    return filtered_df
+
 def book_new_appointment():
     """حجز موعد جديد"""
     st.subheader("➕ حجز موعد جديد")
@@ -483,154 +629,7 @@ def edit_appointment(appointment_id):
     except Exception as e:
         show_error_message(f"خطأ في تحميل نموذج التعديل: {str(e)}")
 
-# الدوال المساعدة المحسنة
-
-def apply_appointments_filters(appointments_df, date_filter, doctor_filter, status_filter, search_name, custom_start=None, custom_end=None):
-    """تطبيق فلاتر المواعيد"""
-    filtered_df = appointments_df.copy()
-    
-    # فلترة حسب التاريخ
-    if date_filter != "الكل":
-        today = date.today()
-        
-        if date_filter == "اليوم":
-            target_date = today
-            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
-            filtered_df = filtered_df[filtered_df['appointment_date'] == target_date]
-        elif date_filter == "غداً":
-            target_date = today + timedelta(days=1)
-            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
-            filtered_df = filtered_df[filtered_df['appointment_date'] == target_date]
-        elif date_filter == "هذا الأسبوع":
-            start_of_week = today - timedelta(days=today.weekday())
-            end_of_week = start_of_week + timedelta(days=6)
-            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
-            filtered_df = filtered_df[
-                (filtered_df['appointment_date'] >= start_of_week) & 
-                (filtered_df['appointment_date'] <= end_of_week)
-            ]
-        elif date_filter == "هذا الشهر":
-            start_of_month = today.replace(day=1)
-            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
-            filtered_df = filtered_df[
-                (filtered_df['appointment_date'] >= start_of_month) & 
-                (filtered_df['appointment_date'] <= today)
-            ]
-        elif date_filter == "مخصص" and custom_start and custom_end:
-            filtered_df['appointment_date'] = pd.to_datetime(filtered_df['appointment_date']).dt.date
-            filtered_df = filtered_df[
-                (filtered_df['appointment_date'] >= custom_start) & 
-                (filtered_df['appointment_date'] <= custom_end)
-            ]
-    
-    # فلترة حسب الطبيب
-    if doctor_filter != "الكل":
-        filtered_df = filtered_df[filtered_df['doctor_name'] == doctor_filter]
-    
-    # فلترة حسب الحالة
-    if status_filter != "الكل":
-        filtered_df = filtered_df[filtered_df['status'] == status_filter]
-    
-    # بحث حسب اسم المريض
-    if search_name:
-        filtered_df = filtered_df[filtered_df['patient_name'].str.contains(search_name, case=False, na=False)]
-    
-    return filtered_df
-
-def show_appointments_summary(appointments_df):
-    """عرض ملخص المواعيد"""
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_appointments = len(appointments_df)
-        st.metric("📅 إجمالي المواعيد", total_appointments)
-    
-    with col2:
-        confirmed_appointments = len(appointments_df[appointments_df['status'] == 'مؤكد'])
-        st.metric("✅ المؤكدة", confirmed_appointments)
-    
-    with col3:
-        completed_appointments = len(appointments_df[appointments_df['status'] == 'مكتمل'])
-        st.metric("✅ المكتملة", completed_appointments)
-    
-    with col4:
-        total_revenue = appointments_df['total_cost'].sum()
-        st.metric("💰 إجمالي الإيرادات", format_currency(total_revenue))
-
-def display_appointments_cards(appointments_df):
-    """عرض المواعيد في بطاقات محسنة"""
-    st.subheader("🎴 المواعيد القادمة")
-    
-    # ترتيب حسب التاريخ والوقت
-    appointments_df = appointments_df.sort_values(['appointment_date', 'appointment_time'])
-    
-    for _, appointment in appointments_df.iterrows():
-        status_color = get_status_color(appointment['status'])
-        
-        with st.container():
-            col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
-            
-            with col1:
-                st.markdown(f"""
-                <div style="padding: 10px; border-left: 4px solid {status_color};">
-                <strong>👤 {appointment['patient_name']}</strong><br>
-                📞 {appointment.get('patient_phone', 'غير محدد')}
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.write(f"👨‍⚕️ **{appointment['doctor_name']}**")
-                st.write(f"💊 {appointment['treatment_name']}")
-                st.write(f"📅 {appointment['appointment_date']}")
-            
-            with col3:
-                st.write(f"🕐 **{appointment['appointment_time']}**")
-                st.write(f"💰 {format_currency(appointment['total_cost'])}")
-            
-            with col4:
-                st.markdown(f"""
-                <div style="text-align: center;">
-                <span style="color: {status_color}; font-weight: bold;">
-                ● {appointment['status']}
-                </span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col5:
-                # أزرار الإجراءات
-                col_btn1, col_btn2 = st.columns(2)
-                
-                with col_btn1:
-                    if st.button(f"✏️", key=f"edit_{appointment['id']}", help="تعديل"):
-                        edit_appointment(appointment['id'])
-                
-                with col_btn2:
-                    if st.button(f"🔄", key=f"status_{appointment['id']}", help="تغيير الحالة"):
-                        st.session_state[f'manage_status_{appointment["id"]}'] = True
-        
-        st.divider()
-
-def display_appointments_table(appointments_df):
-    """عرض جدول المواعيد التفصيلي"""
-    st.dataframe(
-        appointments_df[['patient_name', 'doctor_name', 'treatment_name', 
-                        'appointment_date', 'appointment_time', 'status', 'total_cost']],
-        column_config={
-            'patient_name': 'اسم المريض',
-            'doctor_name': 'اسم الطبيب',
-            'treatment_name': 'العلاج',
-            'appointment_date': 'التاريخ',
-            'appointment_time': 'الوقت',
-            'status': 'الحالة',
-            'total_cost': st.column_config.NumberColumn(
-                'التكلفة',
-                format="%.2f ج.م"
-            )
-        },
-        use_container_width=True,
-        hide_index=True
-    )
-
+# الدوال المساعدة
 def get_available_time_slots(doctor_id, appointment_date):
     """الحصول على الأوقات المتاحة للطبيب"""
     all_slots = get_appointment_time_slots()
@@ -717,7 +716,7 @@ def can_delete_appointment(appointment_id):
         return status in ['مجدول', 'في الانتظار']
     return False
 
-# الدوال الأخرى تبقى كما هي (appointments_calendar, appointments_reports, etc.)
+# الدوال الأخرى تبقى كما هي
 def appointments_calendar():
     """تقويم المواعيد"""
     st.subheader("📅 تقويم المواعيد")
@@ -733,47 +732,6 @@ def appointments_calendar():
     
     except Exception as e:
         show_error_message(f"خطأ في عرض التقويم: {str(e)}")
-
-def appointments_reports():
-    """تقارير المواعيد"""
-    st.subheader("📊 تقارير المواعيد")
-    
-    try:
-        # فلترة التواريخ
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("من تاريخ", value=date.today().replace(day=1))
-        with col2:
-            end_date = st.date_input("إلى تاريخ", value=date.today())
-        
-        appointments_df = crud.get_all_appointments()
-        
-        if appointments_df.empty:
-            st.info("لا توجد مواعيد")
-            return
-        
-        # فلترة البيانات
-        appointments_df['appointment_date'] = pd.to_datetime(appointments_df['appointment_date']).dt.date
-        filtered_appointments = appointments_df[
-            (appointments_df['appointment_date'] >= start_date) & 
-            (appointments_df['appointment_date'] <= end_date)
-        ]
-        
-        if filtered_appointments.empty:
-            st.info("لا توجد مواعيد في هذه الفترة")
-            return
-        
-        # إحصائيات عامة
-        show_appointments_statistics(filtered_appointments)
-        
-        # تحليل أداء المواعيد
-        show_appointments_analysis(filtered_appointments)
-        
-        # تقرير الأطباء
-        show_doctors_appointments_report(filtered_appointments)
-        
-    except Exception as e:
-        show_error_message(f"خطأ في تحميل التقارير: {str(e)}")
 
 def show_weekly_calendar():
     """عرض التقويم الأسبوعي"""
@@ -877,6 +835,47 @@ def show_monthly_calendar():
                         {day}
                         </div>
                         """, unsafe_allow_html=True)
+
+def appointments_reports():
+    """تقارير المواعيد"""
+    st.subheader("📊 تقارير المواعيد")
+    
+    try:
+        # فلترة التواريخ
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("من تاريخ", value=date.today().replace(day=1))
+        with col2:
+            end_date = st.date_input("إلى تاريخ", value=date.today())
+        
+        appointments_df = crud.get_all_appointments()
+        
+        if appointments_df.empty:
+            st.info("لا توجد مواعيد")
+            return
+        
+        # فلترة البيانات
+        appointments_df['appointment_date'] = pd.to_datetime(appointments_df['appointment_date']).dt.date
+        filtered_appointments = appointments_df[
+            (appointments_df['appointment_date'] >= start_date) & 
+            (appointments_df['appointment_date'] <= end_date)
+        ]
+        
+        if filtered_appointments.empty:
+            st.info("لا توجد مواعيد في هذه الفترة")
+            return
+        
+        # إحصائيات عامة
+        show_appointments_statistics(filtered_appointments)
+        
+        # تحليل أداء المواعيد
+        show_appointments_analysis(filtered_appointments)
+        
+        # تقرير الأطباء
+        show_doctors_appointments_report(filtered_appointments)
+        
+    except Exception as e:
+        show_error_message(f"خطأ في تحميل التقارير: {str(e)}")
 
 def show_appointments_statistics(appointments_df):
     """عرض إحصائيات المواعيد"""
