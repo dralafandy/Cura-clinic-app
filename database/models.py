@@ -1,5 +1,4 @@
 import sqlite3
-import hashlib
 from datetime import datetime, date
 import os
 
@@ -95,7 +94,7 @@ class Database:
             )
         ''')
         
-        # جدول المخزون والخامات
+        # جدول المخزون
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,7 +157,7 @@ class Database:
         conn.commit()
         conn.close()
         
-        # إضافة بيانات تجريبية إذا كانت قاعدة البيانات فارغة
+        # إضافة بيانات تجريبية
         self.add_sample_data()
     
     def add_sample_data(self):
@@ -169,45 +168,47 @@ class Database:
         # التحقق من وجود بيانات
         cursor.execute("SELECT COUNT(*) FROM doctors")
         if cursor.fetchone()[0] == 0:
-            # إضافة أطباء تجريبيين
+            # أطباء
             sample_doctors = [
                 ("د. أحمد محمد", "طب الأسنان العام", "01234567890", "ahmed@clinic.com", "القاهرة", "2023-01-01", 15000.0, 10.0),
-                ("د. فاطمة علي", "تقويم الأسنان", "01234567891", "fatma@clinic.com", "الجيزة", "2023-02-01", 18000.0, 15.0),
-                ("د. محمد حسن", "جراحة الفم والوجه", "01234567892", "mohamed@clinic.com", "الإسكندرية", "2023-03-01", 20000.0, 20.0)
+                ("د. فاطمة علي", "تقويم الأسنان", "01234567891", "fatma@clinic.com", "الجيزة", "2023-02-01", 18000.0, 15.0)
             ]
+            cursor.executemany('INSERT INTO doctors (name, specialization, phone, email, address, hire_date, salary, commission_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', sample_doctors)
             
-            cursor.executemany('''
-                INSERT INTO doctors (name, specialization, phone, email, address, hire_date, salary, commission_rate)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', sample_doctors)
+            # مرضى
+            sample_patients = [
+                ("محمد علي", "01234567892", "mohamed@patient.com", "القاهرة", "1990-05-15", "ذكر", "لا يوجد", "01012345678"),
+                ("سارة حسن", "01234567893", "sarah@patient.com", "الجيزة", "1995-08-20", "أنثى", "حساسية", "01012345679")
+            ]
+            cursor.executemany('INSERT INTO patients (name, phone, email, address, date_of_birth, gender, medical_history, emergency_contact) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', sample_patients)
             
-            # إضافة علاجات تجريبية
+            # علاجات
             sample_treatments = [
                 ("فحص وتنظيف", "فحص شامل وتنظيف الأسنان", 200.0, 60, "وقائي"),
-                ("حشو عادي", "حشو الأسنان بالحشو الأبيض", 300.0, 45, "علاجي"),
-                ("حشو عصب", "علاج عصب السن", 800.0, 120, "علاجي"),
-                ("خلع سن", "خلع السن", 150.0, 30, "جراحي"),
-                ("تركيب تقويم", "تركيب جهاز تقويم الأسنان", 5000.0, 90, "تقويمي")
+                ("حشو عادي", "حشو الأسنان", 300.0, 45, "علاجي")
             ]
+            cursor.executemany('INSERT INTO treatments (name, description, base_price, duration_minutes, category) VALUES (?, ?, ?, ?, ?)', sample_treatments)
             
-            cursor.executemany('''
-                INSERT INTO treatments (name, description, base_price, duration_minutes, category)
-                VALUES (?, ?, ?, ?, ?)
-            ''', sample_treatments)
+            # مواعيد
+            cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
+                           (1, 1, 1, date.today().isoformat(), "10:00", 200.0))
+            cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
+                           (2, 2, 2, (date.today() + timedelta(days=1)).isoformat(), "14:00", 300.0))
             
-            # إضافة مخزون تجريبي
+            # مخزون
             sample_inventory = [
-                ("قفازات طبية", "مستهلكات", 100, 0.5, 20, None, None),
-                ("كمامات طبية", "مستهلكات", 200, 0.3, 50, None, None),
-                ("حقن التخدير", "أدوية", 50, 15.0, 10, None, "2025-12-31"),
-                ("حشوات بيضاء", "مواد علاجية", 30, 25.0, 5, None, "2025-06-30"),
-                ("خيوط جراحية", "أدوات جراحية", 20, 8.0, 5, None, None)
+                ("قفازات طبية", "مستهلكات", 100, 0.5, 20, 1, "2025-12-31"),
+                ("حقن تخدير", "أدوية", 50, 15.0, 10, 1, "2025-06-30")
             ]
+            cursor.executemany('INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?)', sample_inventory)
             
-            cursor.executemany('''
-                INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', sample_inventory)
+            # موردين
+            cursor.execute('INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms) VALUES (?, ?, ?, ?, ?, ?)',
+                           ("شركة المستلزمات", "علي عبدالله", "01234567894", "supplies@co.com", "القاهرة", "آجل 30 يوم"))
+            
+            # مصروفات
+            cursor.execute('INSERT INTO expenses (category, description, amount, expense_date, payment_method) VALUES (?, ?, ?, ?, ?)',
+                           ("رواتب", "راتب أطباء", 30000.0, date.today().isoformat(), "تحويل بنكي"))
         
         conn.commit()
         conn.close()
