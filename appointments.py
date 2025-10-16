@@ -284,3 +284,4 @@ def delete_appointment(appointment_id):
 
 if __name__ == "__main__":
     show_appointments()
+    
