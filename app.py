@@ -1,8 +1,10 @@
 import streamlit as st
 from datetime import date
-# تغيير: الاستيراد الآن يتم من الحزمة 'database.crud'
+# سنستخدم هذا الاستيراد لإنشاء مثيل محلي لـ app.py (لإحصائيات الشريط الجانبي)
+# هذا المثيل سيختلف عن المثيل 'crud' الذي تستورده صفحاتك، ولكنه ضروري للعمل
 from database.crud import CRUDOperations 
-# ملاحظة: يجب أن تكون ملفات الصفحات في نفس المستوى مع app.py
+
+# استيراد ملفات الصفحات (يجب أن تكون في نفس المجلد)
 import dashboard
 import patients 
 import appointments 
@@ -17,12 +19,10 @@ import suppliers
 # تهيئة التطبيق وإنشاء مثيل قاعدة البيانات
 # ====================================================================
 
-# إنشاء مثيل (Instance) لكلاس CRUDOperations
-# هذا هو الكائن الذي سيتم تمريره لجميع الصفحات
+# إنشاء مثيل (Instance) لكلاس CRUDOperations محلياً لاستخدامه في الإحصائيات الجانبية
 crud = CRUDOperations()
 
-# ... (بقية إعدادات الصفحة والـ CSS كما هي) ...
-
+# تعيين إعدادات الصفحة
 st.set_page_config(
     page_title="نظام إدارة العيادات (CMS)",
     page_icon="🏥",
@@ -30,6 +30,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# تضمين تنسيقات RTL و CSS
 st.markdown("""
 <style>
     /* تطبيق RTL على جميع النصوص باستثناء أكواد البرمجة */
@@ -72,11 +73,12 @@ st.sidebar.title("قائمة النظام")
 selection = st.sidebar.radio("اختر الوحدة:", list(pages.keys()))
 st.sidebar.markdown("---")
 
-# عرض ملخص سريع في الشريط الجانبي
+# عرض ملخص سريع في الشريط الجانبي (يعتمد على مثيل crud المحلي)
 with st.sidebar.expander("ملخص اليوم", expanded=True):
     today = date.today().isoformat()
     st.write(f"**تاريخ اليوم:** {today}")
     
+    # استخدام مثيل CRUD المحلي
     daily_appointments = crud.get_daily_appointments_count()
     financial_summary = crud.get_financial_summary(start_date=today, end_date=today)
     
@@ -92,7 +94,7 @@ with st.sidebar.expander("ملخص اليوم", expanded=True):
 if pages[selection] is not None:
     module = pages[selection]
     
-    # بناءً على أسماء الدوال التي تم تحديدها سابقاً (show_dashboard، show_patients، إلخ)
+    # تحديد اسم الدالة الرئيسية لكل وحدة
     function_map = {
         "الرئيسية (لوحة التحكم)": "show_dashboard",
         "إدارة المواعيد": "show_appointments",
@@ -107,8 +109,9 @@ if pages[selection] is not None:
     
     func_name = function_map.get(selection)
     if func_name and hasattr(module, func_name):
-        # استدعاء الدالة الصحيحة وتمرير مثيل الـ crud
-        getattr(module, func_name)(crud)
+        # **التعديل الهام:** تم استدعاء الدالة *بدون* تمرير أي متغيرات
+        # ليتوافق مع تعريف الدوال في ملفات الصفحات (مثل def show_patients():)
+        getattr(module, func_name)() 
     else:
         st.error(f"خطأ: لم يتم العثور على الدالة {func_name} في ملف {module.__name__}.py")
         
