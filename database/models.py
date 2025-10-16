@@ -196,23 +196,23 @@ class Database:
             cursor.executemany('INSERT INTO treatments (name, description, base_price, duration_minutes, category) VALUES (?, ?, ?, ?, ?)', sample_treatments)
             
             # مواعيد
-            today = date.today().isoformat()  # Explicitly using date.today() for clarity
+            today = date.today().isoformat()
             tomorrow = (date.today() + timedelta(days=1)).isoformat()
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
                           (1, 1, 1, today, "10:00", 200.0))
             cursor.execute('INSERT INTO appointments (patient_id, doctor_id, treatment_id, appointment_date, appointment_time, total_cost) VALUES (?, ?, ?, ?, ?, ?)',
                           (2, 2, 2, tomorrow, "14:00", 300.0))
             
-            # مخزون
+            # موردين (insert suppliers first)
+            cursor.execute('INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms) VALUES (?, ?, ?, ?, ?, ?)',
+                          ("شركة المستلزمات", "علي عبدالله", "01234567894", "supplies@co.com", "القاهرة", "آجل 30 يوم"))
+            
+            # مخزون (now safe to insert with supplier_id = 1)
             sample_inventory = [
                 ("قفازات طبية", "مستهلكات", 100, 0.5, 20, 1, "2025-12-31"),
                 ("حقن تخدير", "أدوية", 50, 15.0, 10, 1, "2025-06-30")
             ]
             cursor.executemany('INSERT INTO inventory (item_name, category, quantity, unit_price, min_stock_level, supplier_id, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?)', sample_inventory)
-            
-            # موردين
-            cursor.execute('INSERT INTO suppliers (name, contact_person, phone, email, address, payment_terms) VALUES (?, ?, ?, ?, ?, ?)',
-                          ("شركة المستلزمات", "علي عبدالله", "01234567894", "supplies@co.com", "القاهرة", "آجل 30 يوم"))
             
             # مصروفات
             cursor.execute('INSERT INTO expenses (category, description, amount, expense_date, payment_method) VALUES (?, ?, ?, ?, ?)',
