@@ -190,7 +190,12 @@ def delete_selected_suppliers(supplier_ids):
     """حذف الموردين المحددين"""
     try:
         for supplier_id in supplier_ids:
-            crud.delete_supplier(supplier_id)  # أضف هذه الدالة في crud.py إذا لم تكن موجودة
+            # أضف دالة delete_supplier في crud.py
+            conn = crud.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM suppliers WHERE id = ?", (supplier_id,))
+            conn.commit()
+            conn.close()
         show_success_message(f"تم حذف {len(supplier_ids)} مورد بنجاح")
         st.rerun()
     except Exception as e:
@@ -496,9 +501,10 @@ def create_purchase_order(supplier_id, order_items, total_amount, order_date, ex
         show_success_message(f"تم إنشاء طلب الشراء بنجاح بقيمة {format_currency(total_amount)}")
         
         # عرض ملخص الطلب
+        supplier_name = suppliers_df[suppliers_df['id'] == supplier_id]['name'].iloc[0]
         st.info(f"""
         **🛒 ملخص طلب الشراء:**
-        - **المورد:** {crud.get_supplier_by_id(supplier_id)['name']}
+        - **المورد:** {supplier_name}
         - **عدد المنتجات:** {len(order_items)}
         - **إجمالي القيمة:** {format_currency(total_amount)}
         - **تاريخ الطلب:** {format_date_arabic(order_date)}
@@ -509,7 +515,7 @@ def create_purchase_order(supplier_id, order_items, total_amount, order_date, ex
         if st.checkbox("✅ تم التسليم؟ (تحديث المخزون)"):
             for item in order_items:
                 # ابحث عن الصنف وحدث الكمية
-                item_row = crud.get_inventory_by_name(item['item_name'])
+                item_row = crud.get_inventory_by_name(item['item_name'])  # أضف هذه الدالة في crud.py إذا لم تكن
                 if item_row:
                     new_qty = item_row['quantity'] + item['quantity']
                     crud.update_inventory_quantity(item_row['id'], new_qty)
@@ -628,6 +634,12 @@ def show_debts_report():
         st.info("لا توجد ديون حالية للموردين")
         return
     
+    # تحويل التواريخ إلى datetime للمقارنة
+    expenses_df['expense_date'] = pd.to_datetime(expenses_df['expense_date'], errors='coerce')
+    
+    supplier_expenses = expenses_df[(expenses_df['category'] == 'شراء من موردين') & (expenses_df['payment_method'] == 'آجل')]
+    payments_df = expenses_df[expenses_df['category'] == 'دفعات للموردين']
+    
     # حساب الديون الصافية
     debts_data = []
     for _, expense in supplier_expenses.iterrows():
@@ -643,10 +655,11 @@ def show_debts_report():
                 'إجمالي الشراء': total_purchase,
                 'المدفوع': related_payments,
                 'الدين الصافي': max(0, net_debt),
-                'تاريخ الاستحقاق': expense['expense_date']  # افتراضي
+                'تاريخ الاستحقاق': expense['expense_date'].date()  # تحويل إلى date
             })
     
     debts_df = pd.DataFrame(debts_data)
+    debts_df['تاريخ الاستحقاق'] = pd.to_datetime(debts_df['تاريخ الاستحقاق'], errors='coerce').dt.date  # ضمان نوع date
     
     if not debts_df.empty:
         st.dataframe(
@@ -663,8 +676,9 @@ def show_debts_report():
         total_debt = debts_df['الدين الصافي'].sum()
         st.metric("💰 إجمالي الديون للموردين", format_currency(total_debt))
         
-        # تنبيهات الديون المتأخرة
-        overdue_debts = debts_df[debts_df['تاريخ الاستحقاق'] < date.today()]
+        # تنبيهات الديون المتأخرة - مع تحويل إلى date
+        today = date.today()
+        overdue_debts = debts_df[pd.to_datetime(debts_df['تاريخ الاستحقاق']).dt.date < today]
         if not overdue_debts.empty:
             st.warning(f"⚠️ ديون متأخرة: {len(overdue_debts)} مورد - إجمالي {format_currency(overdue_debts['الدين الصافي'].sum())}")
     else:
