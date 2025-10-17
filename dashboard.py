@@ -1,208 +1,163 @@
 import streamlit as st
+import pandas as pd
+from datetime import date, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import date, timedelta
-import pandas as pd
 from database.crud import crud
-from utils.helpers import (
-    create_revenue_chart, create_expenses_pie_chart, 
-    create_appointments_status_chart, create_summary_cards,
-    create_doctor_performance_chart, format_currency, 
-    get_date_range_options, filter_dataframe_by_date
-)
 
-def show_dashboard():
-    st.title("🏥 لوحة التحكم الرئيسية")
+def render():
+    """صفحة لوحة التحكم الرئيسية"""
+    st.markdown("""
+        <div class='main-header'>
+            <h1>🏥 لوحة معلومات العيادة</h1>
+            <p>مرحباً بك في نظام إدارة العيادة المتكامل</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # فلترة التواريخ
-    st.sidebar.subheader("📊 فلترة التقارير")
-    date_ranges = get_date_range_options()
-    selected_range = st.sidebar.selectbox("اختر النطاق الزمني", options=list(date_ranges.keys()))
-    start_date, end_date = date_ranges[selected_range]
+    # الإحصائيات الرئيسية
+    stats = crud.get_dashboard_stats()
+    financial_summary = crud.get_financial_summary()
     
-    # عرض النطاق المحدد
-    st.sidebar.write(f"من: {start_date}")
-    st.sidebar.write(f"إلى: {end_date}")
+    # البطاقات الإحصائية
+    col1, col2, col3, col4 = st.columns(4)
     
-    # الحصول على البيانات
-    try:
-        # البيانات المالية
-        financial_summary = crud.get_financial_summary(start_date, end_date)
+    with col1:
+        st.markdown(f"""
+            <div class='metric-card success'>
+                <div class='metric-label'>👥 إجمالي المرضى</div>
+                <div class='metric-value'>{stats['total_patients']}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+            <div class='metric-card info'>
+                <div class='metric-label'>👨‍⚕️ عدد الأطباء</div>
+                <div class='metric-value'>{stats['total_doctors']}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+            <div class='metric-card warning'>
+                <div class='metric-label'>📅 مواعيد اليوم</div>
+                <div class='metric-value'>{stats['today_appointments']}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <div class='metric-label'>💰 صافي الربح</div>
+                <div class='metric-value'>{financial_summary['net_profit']:,.0f}</div>
+                <div class='metric-label'>جنيه مصري</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # الصف الثاني - الملخص المالي
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("💰 الإيرادات", f"{financial_summary['total_revenue']:,.0f} ج.م")
+    
+    with col2:
+        st.metric("💸 المصروفات", f"{financial_summary['total_expenses']:,.0f} ج.م")
+    
+    with col3:
+        st.metric("📅 المواعيد القادمة", f"{stats['upcoming_appointments']} موعد")
+    
+    with col4:
+        profit_margin = (financial_summary['net_profit'] / financial_summary['total_revenue'] * 100) if financial_summary['total_revenue'] > 0 else 0
+        st.metric("📈 هامش الربح", f"{profit_margin:.1f}%")
+    
+    st.markdown("---")
+    
+    # الصف الثالث - رسوم بيانية
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📊 الإيرادات والمصروفات")
         
-        # عدد المواعيد اليوم
-        appointments_today = crud.get_daily_appointments_count()
+        financial_data = pd.DataFrame({
+            'الفئة': ['الإيرادات', 'المصروفات', 'صافي الربح'],
+            'المبلغ': [
+                financial_summary['total_revenue'],
+                financial_summary['total_expenses'],
+                financial_summary['net_profit']
+            ]
+        })
         
-        # عرض بطاقات الملخص
-        create_summary_cards(
-            financial_summary['total_revenue'],
-            financial_summary['total_expenses'], 
-            financial_summary['net_profit'],
-            appointments_today
+        fig = px.bar(
+            financial_data,
+            x='الفئة',
+            y='المبلغ',
+            color='الفئة',
+            color_discrete_map={
+                'الإيرادات': '#38ef7d',
+                'المصروفات': '#f5576c',
+                'صافي الربح': '#4facfe'
+            }
         )
+        fig.update_layout(showlegend=False, height=300)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.markdown("### 📅 حالة المواعيد")
         
-        st.divider()
-        
-        # الرسوم البيانية
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📈 الإيرادات")
-            payments_df = crud.get_all_payments()
-            if not payments_df.empty:
-                filtered_payments = filter_dataframe_by_date(payments_df, 'payment_date', start_date, end_date)
-                revenue_chart = create_revenue_chart(filtered_payments)
-                if revenue_chart:
-                    st.plotly_chart(revenue_chart, use_container_width=True)
-                else:
-                    st.info("لا توجد بيانات إيرادات في هذه الفترة")
-            else:
-                st.info("لا توجد بيانات إيرادات")
-        
-        with col2:
-            st.subheader("💸 المصروفات")
-            expenses_df = crud.get_all_expenses()
-            if not expenses_df.empty:
-                filtered_expenses = filter_dataframe_by_date(expenses_df, 'expense_date', start_date, end_date)
-                expenses_chart = create_expenses_pie_chart(filtered_expenses)
-                if expenses_chart:
-                    st.plotly_chart(expenses_chart, use_container_width=True)
-                else:
-                    st.info("لا توجد بيانات مصروفات في هذه الفترة")
-            else:
-                st.info("لا توجد بيانات مصروفات")
-        
-        st.divider()
-        
-        # المواعيد والأداء
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            st.subheader("📅 حالة المواعيد")
-            appointments_df = crud.get_all_appointments()
-            if not appointments_df.empty:
-                appointments_chart = create_appointments_status_chart(appointments_df)
-                if appointments_chart:
-                    st.plotly_chart(appointments_chart, use_container_width=True)
-            else:
-                st.info("لا توجد مواعيد")
-        
-        with col4:
-            st.subheader("👨‍⚕️ أداء الأطباء")
-            if not appointments_df.empty:
-                payments_df = crud.get_all_payments()
-                doctor_chart = create_doctor_performance_chart(appointments_df, payments_df)
-                if doctor_chart:
-                    st.plotly_chart(doctor_chart, use_container_width=True)
-            else:
-                st.info("لا توجد بيانات أداء")
-        
-        st.divider()
-        
-        # إحصائيات سريعة
-        st.subheader("📊 إحصائيات سريعة")
-        
-        col5, col6, col7, col8 = st.columns(4)
-        
-        with col5:
-            total_patients = len(crud.get_all_patients())
-            st.metric("👥 إجمالي المرضى", total_patients)
-        
-        with col6:
-            total_doctors = len(crud.get_all_doctors())
-            st.metric("👨‍⚕️ إجمالي الأطباء", total_doctors)
-        
-        with col7:
-            total_treatments = len(crud.get_all_treatments())
-            st.metric("💊 إجمالي العلاجات", total_treatments)
-        
-        with col8:
-            inventory_df = crud.get_all_inventory()
-            low_stock_count = len(crud.get_low_stock_items())
-            st.metric("⚠️ تنبيهات المخزون", low_stock_count)
-        
-        # تنبيهات المخزون
-        if low_stock_count > 0:
-            st.divider()
-            st.subheader("⚠️ تنبيهات المخزون")
-            low_stock_items = crud.get_low_stock_items()
+        all_appointments = crud.get_all_appointments()
+        if not all_appointments.empty:
+            status_counts = all_appointments['status'].value_counts()
             
-            for _, item in low_stock_items.iterrows():
-                st.warning(f"🔔 **{item['item_name']}** - الكمية المتبقية: {item['quantity']} (الحد الأدنى: {item['min_stock_level']})")
-        
-        # المواعيد القادمة
-        st.divider()
-        st.subheader("📅 مواعيد اليوم")
-        
-        today_appointments = crud.get_appointments_by_date(date.today())
-        if not today_appointments.empty:
+            fig = px.pie(
+                values=status_counts.values,
+                names=status_counts.index,
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("لا توجد مواعيد لعرضها")
+    
+    # مواعيد اليوم
+    st.markdown("### 📅 مواعيد اليوم")
+    today_appointments = crud.get_appointments_by_date(date.today().isoformat())
+    
+    if not today_appointments.empty:
+        st.dataframe(
+            today_appointments[['patient_name', 'doctor_name', 'treatment_name', 'appointment_time', 'status']],
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("لا توجد مواعيد اليوم")
+    
+    # التنبيهات
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### ⚠️ تنبيهات المخزون")
+        low_stock = crud.get_low_stock_items()
+        if not low_stock.empty:
+            st.warning(f"يوجد {len(low_stock)} عنصر بمخزون منخفض")
             st.dataframe(
-                today_appointments[['patient_name', 'doctor_name', 'treatment_name', 'appointment_time', 'status']],
-                column_config={
-                    'patient_name': 'اسم المريض',
-                    'doctor_name': 'اسم الطبيب', 
-                    'treatment_name': 'العلاج',
-                    'appointment_time': 'الوقت',
-                    'status': 'الحالة'
-                },
+                low_stock[['item_name', 'quantity', 'min_stock_level']].head(5),
                 use_container_width=True,
                 hide_index=True
             )
         else:
-            st.info("لا توجد مواعيد اليوم")
-        
-        # تحديث تلقائي
-        if st.button("🔄 تحديث البيانات"):
-            st.rerun()
-            
-    except Exception as e:
-        st.error(f"حدث خطأ في تحميل البيانات: {str(e)}")
-        st.info("يرجى التأكد من إعداد قاعدة البيانات بشكل صحيح")
-
-def show_analytics():
-    """عرض التحليلات المتقدمة"""
-    st.title("📊 التحليلات المتقدمة")
+            st.success("✅ جميع العناصر في المستوى الآمن")
     
-    # تحليل الإيرادات الشهرية
-    st.subheader("📈 تحليل الإيرادات الشهرية")
-    
-    payments_df = crud.get_all_payments()
-    if not payments_df.empty:
-        payments_df['payment_date'] = pd.to_datetime(payments_df['payment_date'])
-        payments_df['month_year'] = payments_df['payment_date'].dt.to_period('M')
-        
-        monthly_revenue = payments_df.groupby('month_year')['amount'].sum().reset_index()
-        monthly_revenue['month_year'] = monthly_revenue['month_year'].astype(str)
-        
-        fig = px.bar(monthly_revenue, x='month_year', y='amount',
-                     title='الإيرادات الشهرية',
-                     labels={'month_year': 'الشهر', 'amount': 'المبلغ (ج.م)'})
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # تحليل العلاجات الأكثر طلباً
-    st.subheader("💊 العلاجات الأكثر طلباً")
-    
-    appointments_df = crud.get_all_appointments()
-    if not appointments_df.empty:
-        treatment_counts = appointments_df['treatment_name'].value_counts().head(10)
-        
-        fig = px.pie(values=treatment_counts.values, names=treatment_counts.index,
-                     title='العلاجات الأكثر طلباً')
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # تحليل أوقات المواعيد المفضلة
-    st.subheader("⏰ أوقات المواعيد المفضلة")
-    
-    if not appointments_df.empty:
-        appointments_df['hour'] = pd.to_datetime(appointments_df['appointment_time'], format='%H:%M').dt.hour
-        hourly_appointments = appointments_df['hour'].value_counts().sort_index()
-        
-        fig = px.bar(x=hourly_appointments.index, y=hourly_appointments.values,
-                     title='توزيع المواعيد حسب الساعة',
-                     labels={'x': 'الساعة', 'y': 'عدد المواعيد'})
-        
-        st.plotly_chart(fig, use_container_width=True)
-
-if __name__ == "__main__":
-    show_dashboard()
+    with col2:
+        st.markdown("### 📆 المواعيد القادمة")
+        upcoming = crud.get_upcoming_appointments(days=7)
+        if not upcoming.empty:
+            st.dataframe(
+                upcoming[['appointment_date', 'patient_name', 'doctor_name', 'status']].head(5),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("لا توجد مواعيد قادمة")
