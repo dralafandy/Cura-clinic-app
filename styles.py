@@ -1,219 +1,127 @@
 import streamlit as st
 
+# قائمة بجميع أزرار التنقل الإضافية التي قد تظهر ضمن صفحة "المزيد"
+MORE_PAGES = [
+    {'id': 'doctors', 'label': 'الأطباء', 'icon': '👨‍⚕️'},
+    {'id': 'treatments', 'label': 'العلاجات', 'icon': '💊'},
+    {'id': 'suppliers', 'label': 'الموردين', 'icon': '🚚'},
+    {'id': 'expenses', 'label': 'المصروفات', 'icon': '💸'},
+    {'id': 'reports', 'label': 'التقارير', 'icon': '📈'},
+    {'id': 'activity_log', 'label': 'السجل', 'icon': '📜'}
+]
+
 def load_custom_css():
-    """تحميل الأنماط المخصصة"""
-    st.markdown("""
-    <style>
-        /* تحسين الخط العربي */
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap');
-        
-        html, body, [class*="css"] {
-            font-family: 'Cairo', sans-serif;
+    st.markdown(
+        """
+        <style>
+        /* ======================================= */
+        /* 1. إخفاء الشريط الجانبي الافتراضي */
+        /* ======================================= */
+        section[data-testid="stSidebar"] {
+            display: none !important;
         }
         
-        /* البطاقات */
-        .metric-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-            border-radius: 15px;
-            color: white;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            text-align: center;
-            margin: 10px 0;
-            transition: transform 0.3s ease;
+        /* إخفاء زر القائمة (البرغر) */
+        button[data-testid="baseButton-header"] {
+            display: none !important;
+        }
+
+        /* ======================================= */
+        /* 2. تنسيق شريط التنقل السفلي (الهواتف) */
+        /* ======================================= */
+        
+        /* الحاوية الرئيسية للشريط السفلي */
+        .mobile-nav-container {
+            position: fixed; 
+            bottom: 0;      
+            left: 0;
+            right: 0;
+            z-index: 1000;  
+            background-color: #ffffff; /* خلفية بيضاء */
+            padding: 5px 0;
+            border-top: 1px solid #e0e0e0;
+            box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.05);
         }
         
-        .metric-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-        }
-        
-        .metric-card.success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        }
-        
-        .metric-card.warning {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        }
-        
-        .metric-card.info {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        }
-        
-        .metric-card.danger {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-        }
-        
-        .metric-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin: 10px 0;
-        }
-        
-        .metric-label {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-        
-        /* ========== الشريط الجانبي ========== */
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-        }
-        
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] p {
-            color: white !important;
-        }
-        
-        /* أزرار القائمة الجانبية */
-        [data-testid="stSidebar"] .stButton > button {
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #ffffff !important;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-size: 15px;
-            font-weight: 500;
-            text-align: right;
-            direction: rtl;
-            transition: all 0.3s ease;
-            margin: 5px 0;
-        }
-        
-        [data-testid="stSidebar"] .stButton > button:hover {
-            background-color: rgba(102, 126, 234, 0.8);
-            border-color: rgba(102, 126, 234, 1);
-            color: #ffffff !important;
-            transform: translateX(-5px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        
-        [data-testid="stSidebar"] .stButton > button:active,
-        [data-testid="stSidebar"] .stButton > button:focus {
-            background-color: rgba(102, 126, 234, 1);
-            border-color: rgba(102, 126, 234, 1);
-            color: #ffffff !important;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
-        }
-        
-        [data-testid="stSidebar"] .element-container div[data-testid="stMarkdownContainer"] p {
-            color: white !important;
-        }
-        
-        [data-testid="stSidebar"] .stAlert {
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        [data-testid="stSidebar"] .stSuccess {
-            background-color: rgba(56, 239, 125, 0.2) !important;
-            color: #38ef7d !important;
-            border: 1px solid rgba(56, 239, 125, 0.4);
-        }
-        
-        [data-testid="stSidebar"] .stWarning {
-            background-color: rgba(255, 193, 7, 0.2) !important;
-            color: #ffc107 !important;
-            border: 1px solid rgba(255, 193, 7, 0.4);
-        }
-        
-        [data-testid="stSidebar"] .stError {
-            background-color: rgba(220, 53, 69, 0.2) !important;
-            color: #ff6b6b !important;
-            border: 1px solid rgba(220, 53, 69, 0.4);
-        }
-        
-        [data-testid="stSidebar"] hr {
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-        
-        [data-testid="stSidebar"] * {
-            color: #ffffff;
-        }
-        
-        [data-testid="stSidebar"] button span {
-            color: #ffffff !important;
-        }
-        
-        /* الأزرار العادية */
-        .stButton>button {
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.3s ease;
+        /* تنسيق الأزرار داخل الشريط السفلي */
+        .mobile-nav-container button {
+            background: none;
             border: none;
-        }
-        
-        .stButton>button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        /* العنوان الرئيسي */
-        .main-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 30px;
-            border-radius: 15px;
-            color: white;
+            cursor: pointer;
+            color: #7f8c8d; /* لون الأيقونات والنص الافتراضي (رمادي) */
             text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            padding: 5px 0;
+            transition: color 0.3s ease, transform 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.2;
+            font-size: 10px; /* حجم خط النص أسفل الأيقونة */
+        }
+
+        /* تأثير الزر النشط */
+        .mobile-nav-container button:focus,
+        .mobile-nav-container button:active {
+            outline: none;
+            box-shadow: none;
+        }
+
+        /* تنسيق الزر النشط */
+        .mobile-nav-container button[data-testid^="stButton"]:has(.active) {
+            color: #3498db !important; /* لون نشط (أزرق) */
+            font-weight: bold;
+            transform: translateY(-2px);
+        }
+
+        /* تطبيق لون الأيقونة */
+        .mobile-nav-container button div[data-testid="stMarkdownContainer"] {
+            font-size: 20px;
         }
         
-        /* تقرير المريض */
-        .patient-report {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 20px 0;
+        /* ======================================= */
+        /* 3. تنسيق الشريط العلوي للإحصائيات */
+        /* ======================================= */
+        .top-stats-bar {
+            padding: 10px 0;
+            margin-bottom: 10px;
         }
         
-        .report-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+        /* ضمان وجود مساحة أسفل المحتوى لمنع الشريط السفلي من حجب النص */
+        .stApp {
+            padding-bottom: 70px; /* مسافة كافية للشريط السفلي */
         }
-        
-        .report-section {
-            border-left: 4px solid #667eea;
-            padding-left: 15px;
-            margin: 20px 0;
-        }
-        
-        .report-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
-        }
-        
-        .report-table th {
-            background-color: #f8f9fa;
-            padding: 10px;
-            text-align: right;
-            border-bottom: 2px solid #dee2e6;
-        }
-        
-        .report-table td {
-            padding: 10px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        /* تحسين المدخلات */
-        .stTextInput>div>div>input, .stSelectbox>div>div>select {
-            border-radius: 8px;
-            border: 2px solid #e0e0e0;
-            padding: 10px;
-        }
-        
-        .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-        }
-    </style>
-    """, unsafe_allow_html=True)
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+def render_more_pages():
+    """عرض قائمة الصفحات الإضافية في قائمة منبثقة أو صفحة منفصلة (عند النقر على أيقونة المزيد)"""
+    st.title("☰ المزيد من وحدات النظام")
+    st.write("اختر الوحدة التي تريد التنقل إليها:")
+    
+    # استخدام st.columns لإنشاء شبكة من الأزرار
+    cols_per_row = 3
+    num_pages = len(MORE_PAGES)
+    
+    for i in range(0, num_pages, cols_per_row):
+        cols = st.columns(cols_per_row)
+        for j in range(cols_per_row):
+            idx = i + j
+            if idx < num_pages:
+                page = MORE_PAGES[idx]
+                with cols[j]:
+                    # استخدام زر Streamlit لتغيير حالة التنقل
+                    if st.button(f"{page['icon']} {page['label']}", key=f"more_nav_{page['id']}", use_container_width=True):
+                        st.session_state.current_page = page['id']
+                        st.rerun()
+
+# إذا كانت الصفحة الحالية هي 'settings' (الإعدادات)، فعرض المزيد من الخيارات
+def render_settings_or_more():
+    if st.session_state.get('current_page') == 'settings':
+        # نستخدم صفحة 'settings' كـ "المزيد" لعرض الخيارات الأخرى
+        render_more_pages()
+    else:
+        # إذا كانت أي صفحة أخرى، نستخدم الدالة الأصلية
+        pass 
